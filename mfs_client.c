@@ -33,10 +33,10 @@ int MFS_Lookup(int pinum, char *name) {
         return -1;
     }
 
-    message.type = 1;
-    message.pinum =  pinum;
-    strncpy(message.name, name, strlen(name));
-    int rc = UDP_Write(fd, &server_addr, (char*)&messaage, sizeof(message));
+    message.msg_type = 1;
+    message.lookup.pinum =  pinum;
+    strncpy(message.lookup.name, name, strlen(name));
+    int rc = UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
     
     struct sockaddr_in ret_addy;
     int rc_ret = UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
@@ -53,15 +53,15 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
 
     message.msg_type = 4;
     message.stat.inum = inum;
-    message.m = m;
+    message.stat.m = m;
 
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message)); // sending message to server
 
     struct sockaddr_in ret_addy;
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response)); // get response from server.
-    m->type = response.type;
-    m->size = response.size;
+    m->type = response.stat.type;
+    m->size = response.stat.size;
 
     return 0;
 }
@@ -82,9 +82,9 @@ int MFS_Write(int inum, char *buffer, int offset, int nbytes) {
 
     message.msg_type = 3;
     message.stat.inum = inum;
-    memcpy(message.create.buffer, buffer, nbytes);
-    message.offset = offset;
-    message.nbytes = nbytes;
+    memcpy(message.write.buffer, buffer, nbytes);
+    message.write.offset = offset;
+    message.write.nbytes = nbytes;
 
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
 
@@ -113,21 +113,21 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
 
     message.msg_type = 5;
     message.stat.inum = inum;
-    memcpy(message.create.buffer, buffer, nbytes);
-    message.offset = offset;
-    message.nbytes = nbytes;
+    memcpy(message.read.buffer, buffer, nbytes);
+    message.read.offset = offset;
+    message.read.nbytes = nbytes;
 
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
 
     struct sockaddr_in ret_addy;
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
-    if (!response.type) {
+    if (!response.stat.type) {
         // figure this out
         return 0;
     }
 
-    memcpy(buffer, response.buffer, nbytes);
+    memcpy(buffer, response.stat.buffer, nbytes);
     return 0;
 }
 
@@ -143,9 +143,9 @@ int MFS_Creat(int pinum, int type, char *name) {
     }
 
     message.msg_type = 2;
-    message.client.pinum = pinum;
-    message.client.type = type;
-    strncpy(message.client.name, name, strlen(name));
+    message.create.pinum = pinum;
+    message.create.type = type;
+    strncpy(message.create.name, name, strlen(name));
 
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
 

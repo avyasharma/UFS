@@ -30,7 +30,7 @@ typedef struct _client_message {
             int inum;
             char buffer[MAX_BUFFER_SIZE];
             int offset;
-            int nbytes
+            int nbytes;
         } write;
         struct {
             int inum;
@@ -40,7 +40,7 @@ typedef struct _client_message {
             int inum;
             char buffer[4096];
             int offset;
-            int nbytes
+            int nbytes;
         } read;
         struct {
             int pinum;
