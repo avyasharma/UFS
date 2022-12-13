@@ -2,7 +2,7 @@
 #include "udp.h"
 #include "mfs.h"
 
-// #define BUFFER_SIZE (1000)
+#define BUFFER_SIZE (1000)
 
 // client code
 int main(int argc, char *argv[]) {
@@ -32,6 +32,7 @@ int main(int argc, char *argv[]) {
     } else{
         printf("Got unexpected command: %s\n", cmd);
     }
+
     // struct sockaddr_in addrSnd, addrRcv;
 
     // int sd = UDP_Open(20000);
