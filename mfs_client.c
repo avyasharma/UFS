@@ -40,7 +40,7 @@ int MFS_Lookup(int pinum, char *name) {
     
     struct sockaddr_in ret_addy;
     int rc_ret = UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
-    return response.inode;
+    return response.stat.inode;
 }
 
 int MFS_Stat(int inum, MFS_Stat_t *m) {
@@ -127,7 +127,7 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
         return 0;
     }
 
-    memcpy(buffer, response.stat.buffer, nbytes);
+    memcpy(buffer, response.buffer, nbytes);
     return 0;
 }
 
@@ -153,7 +153,7 @@ int MFS_Creat(int pinum, int type, char *name) {
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
     
-    return 0;
+    return response.return_code;
 }
 
 int MFS_Unlink(int pinum, char *name) {
@@ -177,9 +177,20 @@ int MFS_Unlink(int pinum, char *name) {
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
     
-    return 0;
+    return response.return_code;
 }
 
 int MFS_Shutdown() {
-    return 0;
+    client_message_t message;
+    server_message_t response;
+
+    message.msg_type = 7;
+
+    UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
+
+    struct sockaddr_in ret_addy;
+
+    UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
+
+    return response.return_code;
 }

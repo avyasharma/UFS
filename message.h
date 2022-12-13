@@ -10,6 +10,7 @@
 #define MSG_STAT 4
 #define MSG_READ 5
 #define MSG_UNLINK 6
+#define MSG_SHUTDOWN 7
 
 #include "mfs.h"
 
@@ -38,7 +39,7 @@ typedef struct _client_message {
         } stat;
         struct {
             int inum;
-            char buffer[4096];
+            char buffer[MAX_BUFFER_SIZE];
             int offset;
             int nbytes;
         } read;
@@ -51,6 +52,7 @@ typedef struct _client_message {
 
 typedef struct _server_message {
     int return_code;
+    char buffer[MAX_BUFFER_SIZE];
     
     union {
         MFS_Stat_t stat;
