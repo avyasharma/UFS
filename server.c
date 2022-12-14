@@ -13,6 +13,7 @@ super_t* s;
 inode_t* inode_table;
 inode_t* root_inode;
 dir_ent_t* root_dir;
+int fd, port, sd;
 
 // add function to lookup bitmap
 
@@ -121,10 +122,16 @@ void unlink(int pinum, char *name) {
     
 }
 
+void shutdown(server_message_t msg, struct sockaddr_in curr_addr) {
+    msg.return_code = 0;
+    UDP_Write(sd, &curr_addr, (void *)&msg, sizeof(msg));
+    fsync(fd);
+    close(fd);
+    exit(0);
+}
 
 // server code
 int main(int argc, char *argv[]) {
-    int fd, port;
     // get input
     if(argc > 1) {
         port = atoi(argv[1]);
@@ -159,7 +166,7 @@ int main(int argc, char *argv[]) {
     // printf("\nroot dir entries\n%d %s\n", root_dir[0].inum, root_dir[0].name);
     // printf("%d %s\n", root_dir[1].inum, root_dir[1].name);
 
-    int sd = UDP_Open(port);
+    sd = UDP_Open(port);
     assert(sd > -1);
 
     // loop through requests
