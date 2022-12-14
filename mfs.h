@@ -10,7 +10,6 @@ typedef struct __MFS_Stat_t {
     int type;   // MFS_DIRECTORY or MFS_REGULAR
     int size;   // bytes
     // note: no permissions, access times, etc.
-    int inode;
 } MFS_Stat_t;
 
 typedef struct __MFS_DirEnt_t {

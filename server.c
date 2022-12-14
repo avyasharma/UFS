@@ -43,8 +43,7 @@ int lookup(int pinum, char* name) {
     if(inode.type != MFS_DIRECTORY) { // check if directory
         return -1;
     }
-    // int num_inode_ptrs = inode.size/sizeof(unsigned int);
-    // loop through each pointer in inode.direct
+    // loop through each directory data block
     void* dir_ptr;
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
@@ -55,9 +54,11 @@ int lookup(int pinum, char* name) {
         }
 
         dir_block = (dir_block_t*)inode.direct[i];
+        // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
             entry = (dir_ent_t)(*dir_block).entries[i];
-            if (strcmp(entry.name, name)==0) {
+            // check if name match
+            if (strcmp(entry.name, name)==0) { 
                 if(entry.inum != -1) {
                     return entry.inum;
                 }
@@ -65,7 +66,7 @@ int lookup(int pinum, char* name) {
         }
 
     }
-    
+
     return -1;
 }
 
@@ -111,7 +112,20 @@ void write(int inum, char *buffer, int offset, int nbytes) {
 }
 
 void stat(int inum, MFS_Stat_t *m) {
-
+    if(valid_inum(inum) == -1) {
+        return -1;
+    }
+    inode_t inode = inode_table[inum];
+    MFS_Stat_t stat;
+    stat.type = inode.type;
+    stat.size = inode.size;
+    
+    char reply[BUFFER_SIZE];
+    int rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
+    if(rc == 0) {
+        return 0;
+    }
+    return -1;
 }
 
 void read(int inum, char *buffer, int offset, int nbytes) {
