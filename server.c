@@ -16,31 +16,55 @@ dir_ent_t* root_dir;
 
 // add function to lookup bitmap
 
-int get_block(pinum) {
-    int num_inode_entries = (*inode_table).size/sizeof(unsigned int);
-    if (pinum>=num_inode_entries) {
-        return -1;
+int valid_inum(int inum) {
+    // get pointer to bitmap
+    unsigned int * inode_bitmap_ptr = (*s).inode_bitmap_addr * UFS_BLOCK_SIZE;
+    // check if inode number is out of range
+    int blocks = inum/1024+1;
+    if(blocks > (*s).inode_bitmap_len) {
+        return 0;
     }
-    return (*inode_table).direct[pinum];
+    // get the valid bit
+    int valid_byte = inode_bitmap_ptr[inum/4];
+    int offset = 32 - (inum % 4)*8 -1;
+    int valid_bit = valid_byte << offset;
+    return valid_bit;
 }
 
 int lookup(int pinum, char* name) {
-    // get directory
-    void* directory = get_block(pinum);
-    if(directory == -1) {
+    // check if pinum is valid
+    if(valid_inum(pinum) == 0) {
         return -1;
     }
-    // get number of entries in directory
-    int num_inode_entries = (*(inode_t*)directory).size/sizeof(unsigned int);
-    
-    // search through directory for file/directory with specified name
-    dir_ent_t* entry;
-    for(int i = 0; i <= num_inode_entries ; i += 1) {
-        entry = (dir_ent_t*)(directory+i * sizeof(dir_ent_t));
-        if (strcmp((*entry).name, name)==0) {
-            return (*entry).inum;
-        }
+
+    // get directory
+    inode_t inode = inode_table[pinum];
+    if(inode.type != MFS_DIRECTORY) { // check if directory
+        return -1;
     }
+    // int num_inode_ptrs = inode.size/sizeof(unsigned int);
+    // loop through each pointer in inode.direct
+    void* dir_ptr;
+    dir_block_t* dir_block;
+    int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
+    dir_ent_t entry;
+    for(int i = 0; i< DIRECT_PTRS; i++) {
+        if(inode.direct[i] == -1) {
+            continue;
+        }
+
+        dir_block = (dir_block_t*)inode.direct[i];
+        for(int i = 0; i <= num_dir_entries; i++) {
+            entry = (dir_ent_t)(*dir_block).entries[i];
+            if (strcmp(entry.name, name)==0) {
+                if(entry.inum != -1) {
+                    return entry.inum;
+                }
+            }
+        }
+
+    }
+    
     return -1;
 }
 
@@ -76,6 +100,8 @@ void create(int pinum, int type, char* name) {
     } else {
         
     }
+
+    //pwrite, fsync
 
 }
 
