@@ -53,9 +53,6 @@ typedef struct _client_message {
 typedef struct _server_message {
     int return_code;
     char buffer[MAX_BUFFER_SIZE];
-    
-    union {
-        MFS_Stat_t stat;
-    };
+    MFS_Stat_t stat;
 } server_message_t;
 #endif

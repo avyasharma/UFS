@@ -21,7 +21,7 @@ int image_size;
 
 int valid_inum(int inum) {
     // get pointer to bitmap
-    unsigned int * inode_bitmap_ptr = (*s).inode_bitmap_addr * UFS_BLOCK_SIZE;
+    unsigned int * inode_bitmap_ptr = s->inode_bitmap_addr * UFS_BLOCK_SIZE;
     // check if inode number is out of range
     int blocks = inum/4096;
     if(blocks > (*s).inode_bitmap_len) {
@@ -67,7 +67,7 @@ int find_free_block() {
     return -1;
 }
 
-int lookup(int pinum, char* name) {
+int Lookup(int pinum, char* name, struct sockaddr_in addr) {
     // check if pinum is valid
     if(valid_inum(pinum) == 0) {
         return -1;
@@ -95,13 +95,19 @@ int lookup(int pinum, char* name) {
             // check if name match
             if (strcmp(entry.name, name)==0) { 
                 if(entry.inum != -1) {
+                    server_message_t msg;
+                    msg.return_code = 0;
+                    msg.stat.inode = entry.inum;
+                    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));    
                     return entry.inum;
                 }
             }
         }
 
     }
-
+    server_message_t msg;
+    msg.return_code = -1;
+    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
     return -1;
 }
 
@@ -132,13 +138,14 @@ int create_new(int pinum, int type){
         for(int i = 2; i < 128; i++)
         (*block).entries[i].inum = -1;    
     }
-    pwrite(fd, &inode, sizeof(inode_t), inode_table+inum*sizeof(inode_t));
-    pwrite(fd, &data_block, UFS_BLOCK_SIZE, data_block);
-    fsync(fd);
+    // pwrite(fd, &inode, sizeof(inode_t), inode_table+inum*sizeof(inode_t));
+    // pwrite(fd, &data_block, UFS_BLOCK_SIZE, data_block);
+    // fsync(fd);
+    msync(image, image_size, MS_SYNC);
     return inum;
 }
 
-void create(int pinum, int type, char* name, struct sockaddr_in addr) {
+void Create(int pinum, int type, char* name, struct sockaddr_in addr) {
     // check if name is too long
     if(strlen(name) > 28) {
         return -1;
@@ -148,7 +155,7 @@ void create(int pinum, int type, char* name, struct sockaddr_in addr) {
         return -1;
     }
     // check if file/directory already exists
-    if(lookup(pinum, name) != -1) {
+    if(Lookup(pinum, name, addr) != -1) {
         return 0;
     }
 
@@ -190,11 +197,11 @@ void create(int pinum, int type, char* name, struct sockaddr_in addr) {
     return -1;
 }
 
-void write(int inum, char *buffer, int offset, int nbytes) {
-
+void Write(int inum, char *buffer, int offset, int nbytes) {
+    return 0;
 }
 
-void stat(int inum, MFS_Stat_t *m, struct sockaddr_in addr) {
+void Stat(int inum, MFS_Stat_t *m, struct sockaddr_in addr) {
     if(valid_inum(inum) == -1) {
         return -1;
     }
@@ -211,7 +218,7 @@ void stat(int inum, MFS_Stat_t *m, struct sockaddr_in addr) {
     return -1;
 }
 
-int read(int inum, char *buffer, int offset, int nbytes) {
+int Read(int inum, char *buffer, int offset, int nbytes) {
     if (!valid_inum(inum) || offset < 0 || nbytes < 0) {
         return -1;
     }
@@ -263,14 +270,16 @@ int read(int inum, char *buffer, int offset, int nbytes) {
     return 0;
 }
 
-void unlink(int pinum, char *name) {
+void Unlink(int pinum, char *name) {
     
 }
 
-void shutdown(server_message_t msg, struct sockaddr_in curr_addr) {
+void Shutdown(struct sockaddr_in addr) {
+    server_message_t msg;
     msg.return_code = 0;
-    UDP_Write(sd, &curr_addr, (void *)&msg, sizeof(msg));
+    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
     fsync(fd);
+    msync(image, image_size, MS_SYNC);
     close(fd);
     exit(0);
 }
@@ -328,22 +337,25 @@ int main(int argc, char *argv[]) {
             switch (message.msg_type)
             {
             case MSG_LOOKUP:
-                lookup(message.lookup.pinum, message.lookup.name);
+                Lookup(message.lookup.pinum, message.lookup.name, addr);
                 break;
             case MSG_CREATE:
-                create(message.create.pinum, message.create.type, message.create.name, addr);
+                Create(message.create.pinum, message.create.type, message.create.name, addr);
                 break;
             case MSG_WRITE:
-                write(message.write.inum, message.write.buffer, message.write.offset, message.write.nbytes);
+                Write(message.write.inum, message.write.buffer, message.write.offset, message.write.nbytes);
                 break;
             case MSG_STAT:
-                stat(message.stat.inum, message.stat.m, addr);
+                Stat(message.stat.inum, message.stat.m, addr);
                 break;
             case MSG_READ:
-                read(message.read.inum, message.read.buffer, message.read.offset, message.read.nbytes);
+                Read(message.read.inum, message.read.buffer, message.read.offset, message.read.nbytes);
                 break;
             case MSG_UNLINK:
-                unlink(message.unlink.pinum, message.unlink.name);
+                Unlink(message.unlink.pinum, message.unlink.name);
+                break;
+            case MSG_SHUTDOWN:
+                Shutdown(addr);
                 break;
             }
 

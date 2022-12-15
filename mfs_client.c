@@ -3,10 +3,15 @@
 #include "mfs.h"
 #include "message.h"
 #include "server.c"
+#include <time.h>
+#include <stdlib.h>
 
 struct sockaddr_in server_addr;
 int fd;
 int connected = 0;
+
+int MIN_PORT = 20000;
+int MAX_PORT = 40000;
 
 int MFS_Init(char *hostname, int port) {
     int rc = UDP_FillSockAddr(&server_addr, hostname, port);
@@ -14,7 +19,9 @@ int MFS_Init(char *hostname, int port) {
         printf("Failed to set up server address\n");
         return rc;
     }
-    fd = UDP_Open(12121);
+    srand(time(0));
+    int port_num = (rand() % (MAX_PORT - MIN_PORT) + MIN_PORT);
+    fd = UDP_Open(port_num);
     connected = 1;
     return 0;
 }
@@ -191,6 +198,7 @@ int MFS_Shutdown() {
     struct sockaddr_in ret_addy;
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
-
+    //exit(0);
+    //UDP_Close(fd);
     return response.return_code;
 }
