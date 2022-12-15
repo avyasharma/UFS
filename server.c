@@ -21,15 +21,48 @@ int valid_inum(int inum) {
     // get pointer to bitmap
     unsigned int * inode_bitmap_ptr = (*s).inode_bitmap_addr * UFS_BLOCK_SIZE;
     // check if inode number is out of range
-    int blocks = inum/1024+1;
+    int blocks = inum/4096;
     if(blocks > (*s).inode_bitmap_len) {
         return 0;
     }
     // get the valid bit
-    int valid_byte = inode_bitmap_ptr[inum/4];
-    int offset = 32 - (inum % 4)*8 -1;
-    int valid_bit = valid_byte << offset;
+    int valid_byte = inode_bitmap_ptr[inum/32];
+    int offset = 31 - (inum % 32);
+    int valid_bit = (valid_byte >> offset) & 1;
+    
     return valid_bit;
+}
+
+int find_free_inode() {
+    unsigned int * inode_bitmap_ptr = (*s).inode_bitmap_addr * UFS_BLOCK_SIZE;
+    int num_inodes = (*s).inode_bitmap_len*4096;
+    int byte, offset, bit;
+    for(int inum = 0; inum< num_inodes; inum++) {
+        byte = inode_bitmap_ptr[inum/4];
+        offset = 31 - (inum % 32);
+        bit = (byte >> offset) & 1;
+        if(bit != 1) {
+            inode_bitmap_ptr[inum/4] = byte | (1 << offset);
+            return inum;
+        }
+    }
+    return -1;
+}
+
+int find_free_block() {
+    unsigned int * data_bitmap_ptr = (*s).data_bitmap_addr * UFS_BLOCK_SIZE;
+    int num_blocks = (*s).data_bitmap_len*4096;
+    int byte, offset, bit;
+    for(int idx = 0; idx< num_blocks; idx++) {
+        byte = data_bitmap_ptr[idx/4];
+        offset = 31 - (idx % 32);
+        bit = (byte >> offset) & 1;
+        if(bit != 1) {
+            data_bitmap_ptr[idx/4] = byte | (1 << offset);
+            return (*s).data_region_addr + idx*UFS_BLOCK_SIZE;
+        }
+    }
+    return -1;
 }
 
 int lookup(int pinum, char* name) {
@@ -70,41 +103,86 @@ int lookup(int pinum, char* name) {
     return -1;
 }
 
+int create_new(int pinum, int type){
+    
+    // find inum of a free inode
+    int inum = find_free_inode();
+    // get inode
+    inode_t inode = inode_table[inum];
+    inode.type = type;
+    inode.size = sizeof(unsigned int);
+    // find a free data block
+    void* data_block = find_free_block();
+    inode.direct[0] = data_block;
+    // fill rest of inode with unused
+    for(int i = 1; i< DIRECT_PTRS; i++) {
+        inode.direct[i] = -1;
+    }
+    if(type == UFS_DIRECTORY) {
+        // initialize directory data block
+        dir_block_t* block = (dir_block_t *)data_block;
+        strcpy((*block).entries[0].name, ".");
+        (*block).entries[0].inum = inum;
+
+        strcpy((*block).entries[1].name, "..");
+        (*block).entries[1].inum = pinum;
+
+        for(int i = 2; i < 128; i++)
+        (*block).entries[i].inum = -1;    
+    }
+    pwrite(fd, &inode, sizeof(inode_t), inode_table+inum*sizeof(inode_t));
+    pwrite(fd, &data_block, UFS_BLOCK_SIZE, data_block);
+    fsync(fd)
+    return inum;
+}
+
 void create(int pinum, int type, char* name) {
     // check if name is too long
     if(strlen(name) > 28) {
         return -1;
     }
-    // get directory with pinum
-    void* directory = get_block(pinum);
-    if(directory == -1) {
+    // check if pinum is valid
+    if(valid_inum(pinum)==-1) {
         return -1;
     }
-    // get number of entries in directory
-    int num_inode_entries = (*(inode_t*)directory).size/sizeof(unsigned int);
-    
-    // check if name exists
-    dir_ent_t* entry;
-    for(int i = 0; i <= num_inode_entries ; i += 1) {
-        entry = (dir_ent_t*)(directory+i * sizeof(dir_ent_t));
-        if (strcmp((*entry).name, name)==0) {
-            return 0;
-        }
+    // check if file/directory already exists
+    if(lookup(pinum, name) != -1) {
+        return 0;
     }
 
-    // search for unused inode
+    // get directory
+    inode_t inode = inode_table[pinum];
+    if(inode.type != MFS_DIRECTORY) { // check if directory
+        return -1;
+    }
 
+    // loop through each directory data block and find empty spot
+    void* dir_ptr;
+    dir_block_t* dir_block;
+    int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
+    dir_ent_t entry;
+    for(int i = 0; i< DIRECT_PTRS; i++) {
+        // if(inode.direct[i] == -1) {
+        //     continue;
+        // }
 
-    // create file/directory
-    if (type == MFS_REGULAR_FILE) {
-        
-        //directory + num_inode_entries * sizeof(dire_ent_t) = ;
-    } else {
-        
+        dir_block = (dir_block_t*)inode.direct[i];
+        // loop through directory data block for each directory entry
+        for(int i = 0; i <= num_dir_entries; i++) {
+            entry = (dir_ent_t)(*dir_block).entries[i];
+            // if found empty directory entry
+            if(entry.inum == -1) {
+                strcpy(entry.name, name);
+                entry.inum = create_new(pinum, type);
+                rc = pwrite
+                return 0;
+            }
+        }
+
     }
 
     //pwrite, fsync
-
+    return -1;
 }
 
 void write(int inum, char *buffer, int offset, int nbytes) {
