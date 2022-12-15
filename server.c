@@ -206,8 +206,56 @@ void stat(int inum, MFS_Stat_t *m) {
     return -1;
 }
 
-void read(int inum, char *buffer, int offset, int nbytes) {
+int read(int inum, char *buffer, int offset, int nbytes) {
+    if (!valid_inum(inum) || offset < 0 || nbytes < 0) {
+        return -1;
+    }
+
+    // CHECK MATH AND EDGE CASES
+
+    // read should fail if offset greater than file size or offset and nbytes is not a multiple of size of MFS_DirEnt_t
+
+    // if inode not allocated, then return -1
+
+    // if reading from directory
+
+    // Get inode for given inode number
+    inode_t inode = inode_table[inum];
+    int i = offset / 4096;
+    int num = nbytes / sizeof(MFS_DirEnt_t);
+    MFS_DirEnt_t d[num];
+    int total = offset % 4096 + nbytes;
+    if (total < 4096) {
+        if (inode.type == MFS_DIRECTORY) {
+            for (int idx = 0; idx < num; i++) {
+                int start = inode.direct[idx] * UFS_BLOCK_SIZE + (offset % 4096) + (idx * sizeof(MFS_DirEnt_t));
+                pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
+            }
+        } else {
+            pread(fd, buffer, nbytes, offset);  
+        }
+    } 
+    if (nbytes - (offset % 4096)) {
+        int start = 4096 - (offset % 4096);
+        if (inode.type == MFS_DIRECTORY) {
+            if (start / sizeof(MFS_DirEnt_t) <= num) {
+                for (int x = 0; x < start / sizeof(MFS_DirEnt_t); x++) {
+                    int begin = inode.direct[x] * UFS_BLOCK_SIZE + (offset % 4096) + (x * sizeof(MFS_DirEnt_t));
+                    pread(fd, &(d[x]), sizeof(MFS_DirEnt_t), begin);
+                }
+                for (int j = 0; j < num - (start / sizeof(MFS_DirEnt_t)); j++) {
+                    int begin = inode.direct[j] * UFS_BLOCK_SIZE + (offset % 4096) + (j * sizeof(MFS_DirEnt_t));
+                    pread(fd, &(d[start / sizeof(MFS_DirEnt_t) + j]), sizeof(MFS_DirEnt_t), begin);
+                }
+            }
+
+        } else {
+            pread(fd, buffer, nbytes, inode.direct[i] * UFS_BLOCK_SIZE + (offset % 4096));  
+            pread(fd, buffer, nbytes, inode.direct[i + 1] * UFS_BLOCK_SIZE);
+        } 
+    }
     
+    return 0;
 }
 
 void unlink(int pinum, char *name) {
