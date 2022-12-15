@@ -22,6 +22,7 @@ int MFS_Init(char *hostname, int port) {
     srand(time(0));
     int port_num = (rand() % (MAX_PORT - MIN_PORT) + MIN_PORT);
     fd = UDP_Open(port_num);
+    // fd = UDP_Open(port);
     connected = 1;
     return 0;
 }
@@ -40,7 +41,7 @@ int MFS_Lookup(int pinum, char *name) {
         return -1;
     }
 
-    message.msg_type = 1;
+    message.msg_type = MSG_LOOKUP;
     message.lookup.pinum =  pinum;
     strncpy(message.lookup.name, name, strlen(name));
     int rc = UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
@@ -58,7 +59,7 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
         return -1;
     }
 
-    message.msg_type = 4;
+    message.msg_type = MSG_STAT;
     message.stat.inum = inum;
     message.stat.m = m;
 
@@ -87,7 +88,7 @@ int MFS_Write(int inum, char *buffer, int offset, int nbytes) {
         return -1;
     }
 
-    message.msg_type = 3;
+    message.msg_type = MSG_WRITE;
     message.stat.inum = inum;
     memcpy(message.write.buffer, buffer, nbytes);
     message.write.offset = offset;
@@ -118,7 +119,7 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
         return -1;
     }
 
-    message.msg_type = 5;
+    message.msg_type = MSG_READ;
     message.stat.inum = inum;
     memcpy(message.read.buffer, buffer, nbytes);
     message.read.offset = offset;
@@ -149,7 +150,7 @@ int MFS_Creat(int pinum, int type, char *name) {
         return -1;
     }
 
-    message.msg_type = 2;
+    message.msg_type = MSG_CREATE;
     message.create.pinum = pinum;
     message.create.type = type;
     strncpy(message.create.name, name, strlen(name));
@@ -174,7 +175,7 @@ int MFS_Unlink(int pinum, char *name) {
         return -1;
     }
 
-    message.msg_type = 2;
+    message.msg_type = MSG_UNLINK;
     message.unlink.pinum = pinum;
     strncpy(message.unlink.name, name, strlen(name));
 
@@ -191,7 +192,7 @@ int MFS_Shutdown() {
     client_message_t message;
     server_message_t response;
 
-    message.msg_type = 7;
+    message.msg_type = MSG_SHUTDOWN;
 
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
 
