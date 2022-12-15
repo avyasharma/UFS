@@ -14,6 +14,8 @@ inode_t* inode_table;
 inode_t* root_inode;
 dir_ent_t* root_dir;
 int fd, port, sd;
+void * image;
+int image_size;
 
 // add function to lookup bitmap
 
@@ -132,11 +134,11 @@ int create_new(int pinum, int type){
     }
     pwrite(fd, &inode, sizeof(inode_t), inode_table+inum*sizeof(inode_t));
     pwrite(fd, &data_block, UFS_BLOCK_SIZE, data_block);
-    fsync(fd)
+    fsync(fd);
     return inum;
 }
 
-void create(int pinum, int type, char* name) {
+void create(int pinum, int type, char* name, struct sockaddr_in addr) {
     // check if name is too long
     if(strlen(name) > 28) {
         return -1;
@@ -161,6 +163,8 @@ void create(int pinum, int type, char* name) {
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
     dir_ent_t entry;
+    server_message_t* msg;
+    msg -> return_code = -1;
     for(int i = 0; i< DIRECT_PTRS; i++) {
         // if(inode.direct[i] == -1) {
         //     continue;
@@ -174,13 +178,14 @@ void create(int pinum, int type, char* name) {
             if(entry.inum == -1) {
                 strcpy(entry.name, name);
                 entry.inum = create_new(pinum, type);
-                rc = pwrite
+                msg->return_code = 0;
+                msync(image, image_size, MS_SYNC);
                 return 0;
             }
         }
 
     }
-
+    UDP_Write(sd, &addr, (char*)msg, BUFFER_SIZE);
     //pwrite, fsync
     return -1;
 }
@@ -189,7 +194,7 @@ void write(int inum, char *buffer, int offset, int nbytes) {
 
 }
 
-void stat(int inum, MFS_Stat_t *m) {
+void stat(int inum, MFS_Stat_t *m, struct sockaddr_in addr) {
     if(valid_inum(inum) == -1) {
         return -1;
     }
@@ -287,9 +292,9 @@ int main(int argc, char *argv[]) {
     int rc = fstat(fd, &sbuf);
     assert(rc > -1);
 
-    int image_size = (int) sbuf.st_size;
+    image_size = (int) sbuf.st_size;
 
-    void *image = mmap(NULL, image_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    image = mmap(NULL, image_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     assert(image != MAP_FAILED);
 
     // get pointers to file system
@@ -319,20 +324,20 @@ int main(int argc, char *argv[]) {
         if (rc > 0) {
             // add some code to interpret message
             client_message_t message = *msgptr;
-            printf("server:: read message [size:%d contents:(%s)]\n", rc, message);
+            //printf("server:: read message [size:%d contents:(%s)]\n", rc, message);
             switch (message.msg_type)
             {
             case MSG_LOOKUP:
                 lookup(message.lookup.pinum, message.lookup.name);
                 break;
             case MSG_CREATE:
-                create(message.create.pinum, message.create.type, message.create.name);
+                create(message.create.pinum, message.create.type, message.create.name, addr);
                 break;
             case MSG_WRITE:
                 write(message.write.inum, message.write.buffer, message.write.offset, message.write.nbytes);
                 break;
             case MSG_STAT:
-                stat(message.stat.inum, message.stat.m);
+                stat(message.stat.inum, message.stat.m, addr);
                 break;
             case MSG_READ:
                 read(message.read.inum, message.read.buffer, message.read.offset, message.read.nbytes);
