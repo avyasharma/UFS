@@ -7,13 +7,17 @@
 
 // client code
 int main(int argc, char *argv[]) {
-    // MFS_Init("localhost", 10000);
+    MFS_Init("localhost", 10000);
 
-    // // printf("Creating blank dir: %d\n",MFS_Creat(1,0,'dir1'));
-    // // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
-    // printf("INITALIZED\n");
-    // MFS_Shutdown();
-    // printf("SUCCESS\n");
+    // printf("Creating blank dir: %d\n",MFS_Creat(1,0,'dir1'));
+    // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
+    printf("INITALIZED\n");
+
+    MFS_Creat(0, MFS_DIRECTORY, "file1");
+    MFS_Lookup(0, "file1");
+
+    MFS_Shutdown();
+    printf("SHUTDOWN\n");
 
     // struct sockaddr_in addrSnd, addrRcv;
 
@@ -66,23 +70,23 @@ int main(int argc, char *argv[]) {
 
 
     //
-    struct sockaddr_in addrSnd, addrRcv;
+    // struct sockaddr_in addrSnd, addrRcv;
 
-    int sd = UDP_Open(20000);
-    int rc = UDP_FillSockAddr(&addrSnd, "localhost", 10000);
+    // int sd = UDP_Open(20000);
+    // int rc = UDP_FillSockAddr(&addrSnd, "localhost", 10000);
 
-    char message[BUFFER_SIZE];
-    sprintf(message, "hello world");
+    // char message[BUFFER_SIZE];
+    // sprintf(message, "hello world");
 
-    printf("client:: send message [%s]\n", message);
-    rc = UDP_Write(sd, &addrSnd, message, BUFFER_SIZE);
-    if (rc < 0) {
-	printf("client:: failed to send\n");
-	exit(1);
-    }
+    // printf("client:: send message [%s]\n", message);
+    // rc = UDP_Write(sd, &addrSnd, message, BUFFER_SIZE);
+    // if (rc < 0) {
+	// printf("client:: failed to send\n");
+	// exit(1);
+    // }
 
-    printf("client:: wait for reply...\n");
-    rc = UDP_Read(sd, &addrRcv, message, BUFFER_SIZE);
-    printf("client:: got reply [size:%d contents:(%s)\n", rc, message);
-    return 0;
+    // printf("client:: wait for reply...\n");
+    // rc = UDP_Read(sd, &addrRcv, message, BUFFER_SIZE);
+    // printf("client:: got reply [size:%d contents:(%s)\n", rc, message);
+    // return 0;
 }

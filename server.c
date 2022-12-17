@@ -84,19 +84,27 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
     dir_ent_t entry;
     for(int i = 0; i< DIRECT_PTRS; i++) {
+        printf("Checking for allocation\n");
         if(inode.direct[i] == -1) {
             continue;
         }
         // dir_ptr = (void*)inode.direct[i];
         // dir_block = (dir_block_t*)dir_ptr;
-        memcpy(dir_block, &inode.direct[i], sizeof(unsigned int));
+        printf("Getting the data block\n");
+        // memcpy(&dir_block, &inode.direct[i], sizeof(unsigned int));
+        dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
         // dir_block = (dir_block_t*) *inode.direct[i];
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
-            entry = (dir_ent_t)(*dir_block).entries[i];
+            //printf("Currently looping through...\n");
+            // entry = (dir_ent_t)(*dir_block).entries[i];
+            //printf("dir_block %p\n", dir_block);
+            entry = (dir_ent_t)(dir_block->entries[i]);
+            //printf("Got the current entry...\n");
             // check if name match
             if (strcmp(entry.name, name)==0) { 
                 if(entry.inum != -1) {
+                    //printf("Return code writing\n");
                     server_message_t msg;
                     msg.return_code = 0;
                     msg.stat.inode = entry.inum;
@@ -107,11 +115,62 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
         }
 
     }
+
+    //printf("Sending shit back\n");
     server_message_t msg;
     msg.return_code = -1;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
     return -1;
 }
+
+int Lookup_helper(int pinum, char* name, struct sockaddr_in addr) {
+    // check if pinum is valid
+    if(valid_inum(pinum) == 0) {
+        return -1;
+    }
+
+    // get directory
+    inode_t inode = inode_table[pinum];
+    if(inode.type != MFS_DIRECTORY) { // check if directory
+        return -1;
+    }
+    // loop through each directory data block
+    dir_block_t* dir_block;
+    int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
+    dir_ent_t entry;
+    for(int i = 0; i< DIRECT_PTRS; i++) {
+        //printf("Checking for allocation\n");
+        if(inode.direct[i] == -1) {
+            continue;
+        }
+        // dir_ptr = (void*)inode.direct[i];
+        // dir_block = (dir_block_t*)dir_ptr;
+        //printf("Getting the data block\n");
+        // memcpy(&dir_block, &inode.direct[i], sizeof(unsigned int));
+        dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
+        // dir_block = (dir_block_t*) *inode.direct[i];
+        // loop through directory data block for each directory entry
+        for(int i = 0; i <= num_dir_entries; i++) {
+            //printf("Currently looping through...\n");
+            // entry = (dir_ent_t)(*dir_block).entries[i];
+            //printf("dir_block %p\n", dir_block);
+            entry = (dir_ent_t)(dir_block->entries[i]);
+            //printf("Got the current entry...\n");
+            // check if name match
+            if (strcmp(entry.name, name)==0) { 
+                if(entry.inum != -1) {
+                    //printf("Return code writing\n");
+                    return entry.inum;
+                }
+            }
+        }
+
+    }
+
+    return -1;
+}
+
+
 
 int create_new(int pinum, int type){
     
@@ -150,6 +209,7 @@ int create_new(int pinum, int type){
 }
 
 int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
+    printf("STARTING CREATE\n");
     // check if name is too long
     if(strlen(name) > 28) {
         return -1;
@@ -159,16 +219,17 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
         return -1;
     }
     // check if file/directory already exists
-    if(Lookup(pinum, name, addr) != -1) {
+    if(Lookup_helper(pinum, name, addr) != -1) {
         return 0;
     }
-
+    printf("PASSED CHECKS\n");
     // get directory
     inode_t inode = inode_table[pinum];
+    printf("INODE TYPE: %d, SIZE: %d\n", inode.type, inode.size);
     if(inode.type != MFS_DIRECTORY) { // check if directory
         return -1;
     }
-
+    printf("GOT DIRECTORY\n");
     // loop through each directory data block and find empty spot
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
@@ -176,12 +237,14 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
     server_message_t msg;
     msg.return_code = -1;
     for(int i = 0; i< DIRECT_PTRS; i++) {
-        // if(inode.direct[i] == -1) {
-        //     continue;
-        // }
+        if(inode.direct[i] == -1) {
+            continue;
+        }
 
         // dir_block = (dir_block_t*)inode.direct[i];
-        memcpy(dir_block, &inode.direct[i], sizeof(unsigned int));
+        // memcpy(dir_block, &inode.direct[i], sizeof(unsigned int));
+        printf("HERE\n");
+        dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
             entry = (dir_ent_t)(*dir_block).entries[i];
@@ -189,13 +252,15 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
             if(entry.inum == -1) {
                 strcpy(entry.name, name);
                 entry.inum = create_new(pinum, type);
+                printf("INUM CREATED :%d\n", entry.inum);
                 msg.return_code = 0;
                 msync(image, image_size, MS_SYNC);
-                return 0;
+                break;
             }
         }
 
     }
+    printf("RETURNING CODE: %d\n", msg.return_code);
     UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
     //pwrite, fsync
     return -1;
@@ -325,6 +390,7 @@ void intHandler(int dummy) {
 
 // server code
 int main(int argc, char *argv[]) {
+    printf("SERVER STARTED\n");
     signal(SIGINT, intHandler);
 
     // get input
@@ -371,6 +437,7 @@ int main(int argc, char *argv[]) {
         client_message_t msg;
         printf("server:: waiting...\n");
         int rc = UDP_Read(sd, &addr, (char*)&msg, BUFFER_SIZE);
+        // printf("Message from client: %d\n", msg.msg_type);
         if (rc > 0) {
             // add some code to interpret message
             client_message_t message = msg;
@@ -378,9 +445,11 @@ int main(int argc, char *argv[]) {
             switch (message.msg_type)
             {
             case MSG_LOOKUP:
+                //printf("Lookin up from server\n");
                 Lookup(message.lookup.pinum, message.lookup.name, addr);
                 break;
             case MSG_CREATE:
+                printf("CREATE from server\n");
                 Create(message.create.pinum, message.create.type, message.create.name, addr);
                 break;
             case MSG_WRITE:
@@ -396,14 +465,15 @@ int main(int argc, char *argv[]) {
                 Unlink(message.unlink.pinum, message.unlink.name);
                 break;
             case MSG_SHUTDOWN:
+                printf("SHUTDOWN from server\n");
                 Shutdown(addr);
                 break;
             }
 
-            char reply[BUFFER_SIZE];
-            sprintf(reply, "goodbye world");
-            rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
-            printf("server:: reply\n");
+            // char reply[BUFFER_SIZE];
+            // sprintf(reply, "goodbye world");
+            // rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
+            // printf("server:: reply\n");
         } 
     }
     return 0; 
