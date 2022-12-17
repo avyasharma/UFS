@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
     // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
     printf("INITALIZED\n");
 
-    int rc = MFS_Creat(0, MFS_REGULAR_FILE, "test");
+    int rc = MFS_Creat(0, MFS_DIRECTORY, "test");
     int inum = MFS_Lookup(0, "test");
 
     printf("Client side inum: %d\n", inum);

@@ -17,6 +17,7 @@ dir_ent_t* root_dir;
 int fd, port, sd;
 void * image;
 int image_size;
+int debug = 3;
 
 // add function to lookup bitmap
 
@@ -69,7 +70,7 @@ unsigned int find_free_block() {
 }
 
 int Lookup(int pinum, char* name, struct sockaddr_in addr) {
-    printf("LOOKUP STARTS HERE...\n");
+    if (debug == 3) printf("LOOKUP STARTS HERE...\n");
     // check if pinum is valid
     if(valid_inum(pinum) == 0) {
         return -1;
@@ -91,22 +92,22 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
         }
         // dir_ptr = (void*)inode.direct[i];
         // dir_block = (dir_block_t*)dir_ptr;
-        printf("Getting the data block\n");
+        if (debug == 3) printf("Getting the data block\n");
         // memcpy(&dir_block, &inode.direct[i], sizeof(unsigned int));
         dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
         // dir_block = (dir_block_t*) *inode.direct[i];
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
-            printf("Currently looping through...\n");
+            if (debug == 1) printf("Currently looping through...\n");
             // entry = (dir_ent_t)(*dir_block).entries[i];
             //printf("dir_block %p\n", dir_block);
             entry = (dir_ent_t)(dir_block->entries[i]);
             //printf("Got the current entry...\n");
             // check if name match
             if (strcmp(entry.name, name)==0) {
-                printf("Match found..\n"); 
+                if (debug == 3) printf("Match found..\n"); 
                 if(entry.inum != -1) {
-                    printf("Return code writing\n");
+                    if (debug == 3) printf("Return code writing\n");
                     server_message_t msg;
                     msg.return_code = 0;
                     msg.stat.inode = entry.inum;
@@ -118,7 +119,7 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
 
     }
 
-    printf("Sending shit back\n");
+    if (debug == 3) printf("Sending stuff back :)\n");
     server_message_t msg;
     msg.return_code = -1;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
@@ -191,17 +192,27 @@ int create_new(int pinum, int type){
     for(int i = 1; i< DIRECT_PTRS; i++) {
         inode.direct[i] = -1;
     }
-    if(type == UFS_DIRECTORY) {
+    if(type == MFS_DIRECTORY) {
         // initialize directory data block
         // dir_block_t* block = (dir_block_t *)data_block;
         dir_block_t* block;
+
+        if (debug == 2) printf("Getting directory\n");
+
         memcpy(block, &data_block, sizeof(unsigned int));
+
+        if (debug == 2) printf("Copied data block\n");
         strcpy((*block).entries[0].name, ".");
+
+        if (debug == 2) printf("Got `.` path in\n");
         (*block).entries[0].inum = inum;
 
+        if (debug == 2) printf("Got `..` path in\n");
         strcpy((*block).entries[1].name, "..");
+
         (*block).entries[1].inum = pinum;
 
+        if (debug == 2) printf("Setting up directory\n");
         for(int i = 2; i < 128; i++)
         (*block).entries[i].inum = -1;    
     }
@@ -213,7 +224,7 @@ int create_new(int pinum, int type){
 }
 
 int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
-    printf("STARTING CREATE\n");
+    if (debug) printf("STARTING CREATE\n");
     // check if name is too long
     if(strlen(name) > 28) {
         return -1;
@@ -226,7 +237,7 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
     if(Lookup_helper(pinum, name, addr) != -1) {
         return 0;
     }
-    printf("PASSED CHECKS\n");
+    if (debug) printf("PASSED CHECKS\n");
     // get directory
     inode_t inode = inode_table[pinum];
     printf("INODE TYPE: %d, SIZE: %d\n", inode.type, inode.size);
@@ -247,7 +258,7 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
 
         // dir_block = (dir_block_t*)inode.direct[i];
         // memcpy(dir_block, &inode.direct[i], sizeof(unsigned int));
-        printf("HERE\n");
+        if (debug == 1) printf("HERE\n");
         dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
@@ -256,7 +267,7 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
             if(entry.inum == -1) {
                 strcpy(entry.name, name);
                 entry.inum = create_new(pinum, type);
-                printf("INUM CREATED :%d\n", entry.inum);
+                if (debug == 1) printf("INUM CREATED :%d\n", entry.inum);
                 msg.return_code = 0;
                 msync(image, image_size, MS_SYNC);
                 break;
@@ -264,32 +275,32 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
         }
 
     }
-    printf("RETURNING CODE: %d\n", msg.return_code);
+    if (debug == 1) printf("RETURNING CODE: %d\n", msg.return_code);
     UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
     //pwrite, fsync
     return -1;
 }
 
 int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr) {
-    printf("Here, bitches\n");
+    if (debug == 1) printf("Here, bitches\n");
     server_message_t msg;
     // check if valid inum
     if(valid_inum(inum)==-1) {
         return -1;
     }
     
-    printf("PASSED CHECKER 1\n");
+    if (debug == 1) printf("PASSED CHECKER 1\n");
     // get directory
-    printf("inum: %d\n", inum);
+    if (debug == 1) printf("inum: %d\n", inum);
     inode_t inode = inode_table[inum];
     // check if regular file
-    printf("Inode Type: %d\n", inode.type);
-    printf("Printed type\n");
+    if (debug == 1) printf("Inode Type: %d\n", inode.type);
+    if (debug == 1) printf("Printed type\n");
     if(inode.type != UFS_REGULAR_FILE) { // check if directory
         return -1;
     }
 
-    printf("PASSED CHECKER 2\n");
+    if (debug == 1) printf("PASSED CHECKER 2\n");
     // check invalid nbytes
     if(nbytes > 4096) {
         return -1;
@@ -302,7 +313,7 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
         return -1;
     }
-    printf("PASSED CHECKER 3\n");
+    if (debug == 1) printf("PASSED CHECKER 3\n");
     // pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
     void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
     if (end_disk == start_disk) {
@@ -315,42 +326,6 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
         memcpy(&eptr, &buffer, nbytes - first);
         msync(image, image_size, MS_SYNC);
     }
-
-    // printf("GOT DIRECTORY\n");
-    // loop through each directory data block and find empty spot
-    // dir_block_t* dir_block;
-    // int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
-    // dir_ent_t entry;
-    // server_message_t msg;
-    // msg.return_code = -1;
-    // for(int i = 0; i< DIRECT_PTRS; i++) {
-    //     if(inode.direct[i] == -1) {
-    //         continue;
-    //     }
-
-    //     // dir_block = (dir_block_t*)inode.direct[i];
-    //     // memcpy(dir_block, &inode.direct[i], sizeof(unsigned int));
-    //     printf("HERE\n");
-    //     dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
-    //     // loop through directory data block for each directory entry
-    //     for(int i = 0; i <= num_dir_entries; i++) {
-    //         entry = (dir_ent_t)(*dir_block).entries[i];
-    //         // if found empty directory entry
-    //         if(entry.inum == -1) {
-    //             strcpy(entry.name, name);
-    //             entry.inum = create_new(pinum, type);
-    //             printf("INUM CREATED :%d\n", entry.inum);
-    //             msg.return_code = 0;
-    //             msync(image, image_size, MS_SYNC);
-    //             break;
-    //         }
-    //     }
-
-    // }
-    // printf("RETURNING CODE: %d\n", msg.return_code);
-    // UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
-    // //pwrite, fsync
-    // return -1;
 
     msg.return_code = 0;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
@@ -532,7 +507,7 @@ int main(int argc, char *argv[]) {
                 Lookup(message.lookup.pinum, message.lookup.name, addr);
                 break;
             case MSG_CREATE:
-                printf("CREATE from server\n");
+                if (debug == 1) printf("CREATE from server\n");
                 Create(message.create.pinum, message.create.type, message.create.name, addr);
                 break;
             case MSG_WRITE:
