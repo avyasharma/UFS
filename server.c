@@ -62,13 +62,14 @@ unsigned int find_free_block() {
         bit = (byte >> offset) & 1;
         if(bit != 1) {
             data_bitmap_ptr[idx/32] = byte | (1 << offset);
-            return (*s).data_region_addr + idx*UFS_BLOCK_SIZE;
+            return idx;
         }
     }
     return -1;
 }
 
 int Lookup(int pinum, char* name, struct sockaddr_in addr) {
+    printf("LOOKUP STARTS HERE...\n");
     // check if pinum is valid
     if(valid_inum(pinum) == 0) {
         return -1;
@@ -76,15 +77,15 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
 
     // get directory
     inode_t inode = inode_table[pinum];
-    if(inode.type != MFS_DIRECTORY) { // check if directory
-        return -1;
-    }
+    // if(inode.type != MFS_DIRECTORY) { // check if directory
+    //     return -1;
+    // }
     // loop through each directory data block
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
     dir_ent_t entry;
     for(int i = 0; i< DIRECT_PTRS; i++) {
-        printf("Checking for allocation\n");
+        // printf("Checking for allocation\n");
         if(inode.direct[i] == -1) {
             continue;
         }
@@ -96,15 +97,16 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
         // dir_block = (dir_block_t*) *inode.direct[i];
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
-            //printf("Currently looping through...\n");
+            printf("Currently looping through...\n");
             // entry = (dir_ent_t)(*dir_block).entries[i];
             //printf("dir_block %p\n", dir_block);
             entry = (dir_ent_t)(dir_block->entries[i]);
             //printf("Got the current entry...\n");
             // check if name match
-            if (strcmp(entry.name, name)==0) { 
+            if (strcmp(entry.name, name)==0) {
+                printf("Match found..\n"); 
                 if(entry.inum != -1) {
-                    //printf("Return code writing\n");
+                    printf("Return code writing\n");
                     server_message_t msg;
                     msg.return_code = 0;
                     msg.stat.inode = entry.inum;
@@ -116,7 +118,7 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
 
     }
 
-    //printf("Sending shit back\n");
+    printf("Sending shit back\n");
     server_message_t msg;
     msg.return_code = -1;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
@@ -131,9 +133,9 @@ int Lookup_helper(int pinum, char* name, struct sockaddr_in addr) {
 
     // get directory
     inode_t inode = inode_table[pinum];
-    if(inode.type != MFS_DIRECTORY) { // check if directory
-        return -1;
-    }
+    // if(inode.type != MFS_DIRECTORY) { // check if directory
+    //     return -1;
+    // }
     // loop through each directory data block
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
@@ -173,7 +175,9 @@ int Lookup_helper(int pinum, char* name, struct sockaddr_in addr) {
 
 
 int create_new(int pinum, int type){
-    
+    // TO DO: Increment Size
+
+
     // find inum of a free inode
     int inum = find_free_inode();
     // get inode
@@ -266,37 +270,90 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
     return -1;
 }
 
-int Write(int inum, char *buffer, int offset, int nbytes) {
+int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr) {
+    printf("Here, bitches\n");
+    server_message_t msg;
     // check if valid inum
     if(valid_inum(inum)==-1) {
         return -1;
     }
+    
+    printf("PASSED CHECKER 1\n");
     // get directory
+    printf("inum: %d\n", inum);
     inode_t inode = inode_table[inum];
     // check if regular file
-    if(inode.type == MFS_DIRECTORY) { // check if directory
+    printf("Inode Type: %d\n", inode.type);
+    printf("Printed type\n");
+    if(inode.type != UFS_REGULAR_FILE) { // check if directory
         return -1;
     }
+
+    printf("PASSED CHECKER 2\n");
     // check invalid nbytes
     if(nbytes > 4096) {
         return -1;
     }
     // check invalid offset
     int start_disk = offset/4096;
-    //int disk_offset = offset % 4096;
+    int start = offset % 4096;
     int end_disk = (offset+nbytes)/4096;
-    //int end_offset = (offset+nbytes)%4096;
+    int end = (offset+nbytes)%4096;
     if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
         return -1;
     }
+    printf("PASSED CHECKER 3\n");
+    // pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
+    void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
+    if (end_disk == start_disk) {
+        memcpy(&wptr, &buffer, nbytes);
+        msync(image, image_size, MS_SYNC);
+    } else {
+        int first = UFS_BLOCK_SIZE - start;
+        memcpy(&wptr, &buffer, first);
+        void *eptr = image + end_disk * UFS_BLOCK_SIZE;
+        memcpy(&eptr, &buffer, nbytes - first);
+        msync(image, image_size, MS_SYNC);
+    }
 
-    // void* data_block;
-    // int current_disk = start_disk;
-    // while(nbytes>0) {
-    //     data_block = image + inode.direct[current_disk];
+    // printf("GOT DIRECTORY\n");
+    // loop through each directory data block and find empty spot
+    // dir_block_t* dir_block;
+    // int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
+    // dir_ent_t entry;
+    // server_message_t msg;
+    // msg.return_code = -1;
+    // for(int i = 0; i< DIRECT_PTRS; i++) {
+    //     if(inode.direct[i] == -1) {
+    //         continue;
+    //     }
+
+    //     // dir_block = (dir_block_t*)inode.direct[i];
+    //     // memcpy(dir_block, &inode.direct[i], sizeof(unsigned int));
+    //     printf("HERE\n");
+    //     dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
+    //     // loop through directory data block for each directory entry
+    //     for(int i = 0; i <= num_dir_entries; i++) {
+    //         entry = (dir_ent_t)(*dir_block).entries[i];
+    //         // if found empty directory entry
+    //         if(entry.inum == -1) {
+    //             strcpy(entry.name, name);
+    //             entry.inum = create_new(pinum, type);
+    //             printf("INUM CREATED :%d\n", entry.inum);
+    //             msg.return_code = 0;
+    //             msync(image, image_size, MS_SYNC);
+    //             break;
+    //         }
+    //     }
 
     // }
+    // printf("RETURNING CODE: %d\n", msg.return_code);
+    // UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
+    // //pwrite, fsync
+    // return -1;
 
+    msg.return_code = 0;
+    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
     return 0;
 }
 
@@ -317,8 +374,9 @@ int Stat(int inum, MFS_Stat_t *m, struct sockaddr_in addr) {
     return -1;
 }
 
-int Read(int inum, char *buffer, int offset, int nbytes) {
-    if (!valid_inum(inum) || offset < 0 || nbytes < 0) {
+int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr) {
+    server_message_t msg;
+    if (!valid_inum(inum) || offset < 0 || nbytes < 0 || nbytes > 4096) {
         return -1;
     }
 
@@ -331,40 +389,65 @@ int Read(int inum, char *buffer, int offset, int nbytes) {
     // if reading from directory
 
     // Get inode for given inode number
-    inode_t inode = inode_table[inum];
-    int i = offset / 4096;
-    int num = nbytes / sizeof(MFS_DirEnt_t);
-    MFS_DirEnt_t d[num];
-    int total = offset % 4096 + nbytes;
-    if (total < 4096) {
-        if (inode.type == MFS_DIRECTORY) {
-            for (int idx = 0; idx < num; i++) {
-                int start = inode.direct[idx] * UFS_BLOCK_SIZE + (offset % 4096) + (idx * sizeof(MFS_DirEnt_t));
-                pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
-            }
-        } else {
-            pread(fd, buffer, nbytes, offset);  
-        }
-    } 
-    if (nbytes - (offset % 4096)) {
-        int start = 4096 - (offset % 4096);
-        if (inode.type == MFS_DIRECTORY) {
-            if (start / sizeof(MFS_DirEnt_t) <= num) {
-                for (int x = 0; x < start / sizeof(MFS_DirEnt_t); x++) {
-                    int begin = inode.direct[x] * UFS_BLOCK_SIZE + (offset % 4096) + (x * sizeof(MFS_DirEnt_t));
-                    pread(fd, &(d[x]), sizeof(MFS_DirEnt_t), begin);
-                }
-                for (int j = 0; j < num - (start / sizeof(MFS_DirEnt_t)); j++) {
-                    int begin = inode.direct[j] * UFS_BLOCK_SIZE + (offset % 4096) + (j * sizeof(MFS_DirEnt_t));
-                    pread(fd, &(d[start / sizeof(MFS_DirEnt_t) + j]), sizeof(MFS_DirEnt_t), begin);
-                }
-            }
+    // inode_t inode = inode_table[inum];
+    // int i = offset / 4096;
+    // int num = nbytes / sizeof(MFS_DirEnt_t);
+    // MFS_DirEnt_t d[num];
+    // int total = offset % 4096 + nbytes;
+    // if (total < 4096) {
+    //     if (inode.type == MFS_DIRECTORY) {
+    //         for (int idx = 0; idx < num; i++) {
+    //             int start = inode.direct[idx] * UFS_BLOCK_SIZE + (offset % 4096) + (idx * sizeof(MFS_DirEnt_t));
+    //             pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
+    //         }
+    //     } else {
+    //         pread(fd, buffer, nbytes, offset);  
+    //     }
+    // } 
+    // if (nbytes - (offset % 4096)) {
+    //     int start = 4096 - (offset % 4096);
+    //     if (inode.type == MFS_DIRECTORY) {
+    //         if (start / sizeof(MFS_DirEnt_t) <= num) {
+    //             for (int x = 0; x < start / sizeof(MFS_DirEnt_t); x++) {
+    //                 int begin = inode.direct[x] * UFS_BLOCK_SIZE + (offset % 4096) + (x * sizeof(MFS_DirEnt_t));
+    //                 pread(fd, &(d[x]), sizeof(MFS_DirEnt_t), begin);
+    //             }
+    //             for (int j = 0; j < num - (start / sizeof(MFS_DirEnt_t)); j++) {
+    //                 int begin = inode.direct[j] * UFS_BLOCK_SIZE + (offset % 4096) + (j * sizeof(MFS_DirEnt_t));
+    //                 pread(fd, &(d[start / sizeof(MFS_DirEnt_t) + j]), sizeof(MFS_DirEnt_t), begin);
+    //             }
+    //         }
 
-        } else {
-            pread(fd, buffer, nbytes, inode.direct[i] * UFS_BLOCK_SIZE + (offset % 4096));  
-            pread(fd, buffer, nbytes, inode.direct[i + 1] * UFS_BLOCK_SIZE);
-        } 
+    //     } else {
+    //         pread(fd, buffer, nbytes, inode.direct[i] * UFS_BLOCK_SIZE + (offset % 4096));  
+    //         pread(fd, buffer, nbytes, inode.direct[i + 1] * UFS_BLOCK_SIZE);
+    //     } 
+    // }
+
+    inode_t inode = inode_table[inum];
+
+    int start_disk = offset/4096;
+    int start = offset % 4096;
+    int end_disk = (offset+nbytes)/4096;
+    int end = (offset+nbytes)%4096;
+    if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
+        return -1;
     }
+
+    void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
+    if (end_disk == start_disk) {
+        memcpy(&buffer, &wptr, nbytes);
+    } else {
+        int first = UFS_BLOCK_SIZE - start;
+        memcpy(&buffer, &wptr, first);
+        void *eptr = image + end_disk * UFS_BLOCK_SIZE;
+        void *bufoff = buffer + first;
+        memcpy(&bufoff, &eptr, nbytes - first);
+    }
+
+    msg.return_code = 0;
+    memcpy(msg.buffer, &buffer, nbytes);
+    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
     
     return 0;
 }
@@ -453,13 +536,13 @@ int main(int argc, char *argv[]) {
                 Create(message.create.pinum, message.create.type, message.create.name, addr);
                 break;
             case MSG_WRITE:
-                Write(message.write.inum, message.write.buffer, message.write.offset, message.write.nbytes);
+                Write(message.write.inum, message.write.buffer, message.write.offset, message.write.nbytes, addr);
                 break;
             case MSG_STAT:
                 Stat(message.stat.inum, message.stat.m, addr);
                 break;
             case MSG_READ:
-                Read(message.read.inum, message.read.buffer, message.read.offset, message.read.nbytes);
+                Read(message.read.inum, message.read.buffer, message.read.offset, message.read.nbytes, addr);
                 break;
             case MSG_UNLINK:
                 Unlink(message.unlink.pinum, message.unlink.name);

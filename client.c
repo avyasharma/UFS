@@ -13,8 +13,15 @@ int main(int argc, char *argv[]) {
     // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
     printf("INITALIZED\n");
 
-    MFS_Creat(0, MFS_DIRECTORY, "file1");
-    MFS_Lookup(0, "file1");
+    int rc = MFS_Creat(0, MFS_REGULAR_FILE, "test");
+    int inum = MFS_Lookup(0, "test");
+
+    printf("Client side inum: %d\n", inum);
+
+    MFS_Write(inum, "OINKY", 0, sizeof("OINKY"));
+
+    char *buffer = malloc(8 * sizeof(char));
+    MFS_Read(inum, buffer, 0, sizeof("OINKY"));
 
     MFS_Shutdown();
     printf("SHUTDOWN\n");
