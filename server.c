@@ -135,7 +135,6 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
                 }
             }
         }
-
     }
 
     if (debug == 3) printf("Sending stuff back :)\n");
@@ -397,20 +396,54 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
 }
 
 int Stat(int inum, MFS_Stat_t *m, struct sockaddr_in addr) {
-    // if(valid_inum(inum) == -1) {
-    //     return -1;
-    // }
+    server_message_t msg;
+    
+    // printf("Here 1\n");
+    if(valid_inum(inum) == -1) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+        return -1;
+    } else {
+        printf("Type %d\n", inode_table[inum].type);
+
+        MFS_Stat_t stat;
+        m = &stat;
+        m->type = inode_table[inum].type;
+        m->size = inode_table[inum].size;
+        m->inode = inum;
+    }
+
+    // printf("Here 2\n");
     // inode_t inode = inode_table[inum];
+
     // MFS_Stat_t stat;
+
+    // printf("Here 3\n");
+    // // inode_t inode = inode_table[inum];
+    // printf("Inode type: %d\n", inode.type);
     // stat.type = inode.type;
+
+    // printf("Here 4\n");
     // stat.size = inode.size;
+
+    // printf("Here 5\n");
+    // stat.inode = inum;    
+
+    // printf("Here 6\n");
+    msg.return_code = 0;
+    msg.stat.type = m->type;
+    msg.stat.size = m->size;
+    msg.stat.inode = inum;
+    // memcpy(&msg.stat, &stat, sizeof(MFS_Stat_t));
+    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
     
     // char reply[BUFFER_SIZE];
     // int rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
     // if(rc == 0) {
     //     return 0;
     // }
-    return -1;
+
+    return 0;
 }
 
 int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr) {

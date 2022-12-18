@@ -13,10 +13,17 @@ int main(int argc, char *argv[]) {
     // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
     printf("INITALIZED\n");
 
-    int rc = MFS_Creat(0, MFS_DIRECTORY, "file");
-    int inum = MFS_Lookup(0, "file");
+    int rc = MFS_Creat(0, MFS_REGULAR_FILE, "file1");
+    int inum = MFS_Lookup(0, "file1");
     printf("inode: %d\n", inum);
-    printf("DIR LOOKUP: %d\n", MFS_Lookup(inum, "."));
+
+    MFS_Stat_t* m = (MFS_Stat_t *) malloc(sizeof(MFS_Stat_t));
+
+    printf("Completed stat\n");
+    MFS_Stat(inum, m);
+    printf("Type of m: %d\n", m->type);
+
+    free(m);
 
     // printf("Client side inum: %d\n", inum);
 

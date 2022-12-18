@@ -74,10 +74,23 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
     struct sockaddr_in ret_addy;
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response)); // get response from server.
+    // printf("Before mem copy\n");
+    printf("Response type: %d\n", response.stat.type);
+    printf("Response size: %d\n", response.stat.size);
+    printf("Response inum: %d\n", response.stat.inode);
+    // printf("M type initial: %d\n", m->type);
     m->type = response.stat.type;
+    // printf("Mem type: %d\n", m->type);
+    // printf("Before mem copy 1\n");
     m->size = response.stat.size;
+    // printf("Before mem copy 1\n");
+    m->inode = response.stat.inode;
+    // printf("After mem copy\n");
+    // memcpy(m, &response.stat, sizeof(MFS_Stat_t));
+    
+    printf("m type: %d\n", m->type);
 
-    return 0;
+    return response.return_code;
 }
 
 int MFS_Write(int inum, char *buffer, int offset, int nbytes) {
