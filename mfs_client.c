@@ -94,21 +94,23 @@ int MFS_Write(int inum, char *buffer, int offset, int nbytes) {
     //     return -1;
     // }
 
-    printf("TYPE assingd\n");
+    // printf("TYPE ASSIGNED\n");
     message.msg_type = MSG_WRITE;
     message.write.inum = inum;
-    printf("BEFORE MEMCPY\n");
+    // printf("BEFORE MEMCPY\n");
     memcpy(message.write.buffer, buffer, nbytes);
     message.write.offset = offset;
     message.write.nbytes = nbytes;
+    printf("ABOUT TO CALL WRITE. BUFFER: %s\n", message.write.buffer);
     printf("NBYTES IN MFS CLIENT :%d\n", message.write.nbytes);
-    printf("BEFORE ");
+    printf("OFFSET IN MFS CLIENT :%d\n", message.write.offset);
+    // printf("BEFORE ");
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
 
     struct sockaddr_in ret_addy;
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
-    printf("Write return code: %d", response.return_code);
+    printf("Write return code: %d\n", response.return_code);
     if (response.return_code == -1) {
         return -1;
     }
@@ -144,7 +146,7 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
     if (response.return_code == -1) {
         return -1;
     }
-
+    printf("BUFFER in MFS_READ: %s\n", response.buffer);
     memcpy(buffer, response.buffer, nbytes);
     return 0;
 }

@@ -18,11 +18,11 @@ int main(int argc, char *argv[]) {
 
     printf("Client side inum: %d\n", inum);
 
-    printf("SIZEOF OINKY: %ld\n", sizeof("OINKY"));
-    MFS_Write(inum, "OINKY", 0, sizeof("OINKY"));
+    printf("SIZEOF OINK: %ld\n", sizeof("OINK"));
+    MFS_Write(inum, "OINK", 0, sizeof("OINK"));
 
     char *buffer = malloc(8 * sizeof(char));
-    MFS_Read(inum, buffer, 0, sizeof("OINKY"));
+    MFS_Read(inum, buffer, 0, sizeof("OINK"));
     printf("BUFFER: %s\n", buffer);
     free(buffer);
     MFS_Shutdown();

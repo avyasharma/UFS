@@ -17,7 +17,7 @@ dir_ent_t* root_dir;
 int fd, port, sd;
 void * image;
 int image_size;
-int debug = 1;
+int debug = 0;
 
 // add function to lookup bitmap
 
@@ -53,16 +53,30 @@ unsigned int find_free_inode() {
     return -1;
 }
 
+unsigned int get_bit(unsigned int *bitmap, int position) {
+   int index = position / 32;
+   int offset = 31 - (position % 32);
+   return (bitmap[index] >> offset) & 0x1;
+}
+
+void set_bit(unsigned int *bitmap, int position) {
+   int index = position / 32;
+   int offset = 31 - (position % 32);
+   bitmap[index] |= 0x1 << offset;
+}
+
 unsigned int find_free_block() {
     unsigned int * data_bitmap_ptr = image + (*s).data_bitmap_addr * UFS_BLOCK_SIZE;
     int num_blocks = (*s).data_bitmap_len*4096;
     int byte, offset, bit;
     for(int idx = 0; idx< num_blocks; idx++) {
-        byte = data_bitmap_ptr[idx/32];
-        offset = 31 - (idx % 32);
-        bit = (byte >> offset) & 1;
+        // byte = data_bitmap_ptr[idx/32];
+        // offset = 31 - (idx % 32);
+        // bit = (byte >> offset) & 1;
+        bit = get_bit(data_bitmap_ptr, idx);
         if(bit != 1) {
             data_bitmap_ptr[idx/32] = byte | (1 << offset);
+            set_bit(data_bitmap_ptr, idx);
             return idx+(*s).data_region_addr;
         }
     }
@@ -306,7 +320,7 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     printf("WRITE STARTED\n");
     printf("NBYTES FROM WRITE %d\n", nbytes);
     printf("OFFSET FROM WRITE %d\n", offset);
-    if (debug == 1) printf("Here, bitches\n");
+    if (debug == 1) printf("In write\n");
     server_message_t msg;
     // check if valid inum
     if(valid_inum(inum)==-1) {
@@ -337,12 +351,13 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     }
     // check invalid offset
     int start_disk = offset/4096;
-    int start_offset = offset % 4096;
-    int end_disk = (offset+nbytes)/4096;
-    int end_offset = (offset+nbytes)%4096;
-    if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
-        return -1;
-    }
+    int block_off = offset % 4096;
+    // int start_offset = offset % 4096;
+    // int end_disk = (offset+nbytes)/4096;
+    // int end_offset = (offset+nbytes)%4096;
+    // if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
+    //     return -1;
+    // }
     if (debug == 1) printf("PASSED CHECKER 3\n");
     // pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
     // void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
@@ -351,26 +366,32 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     if(inode.direct[start_disk] == -1) {
         inode.direct[start_disk] = find_free_block();
     }
-    printf("start_disk: %d\n", start_disk);
-    printf("start_offset: %d\n", start_offset);
-    void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
-    printf("POINTER: %p\n", wptr);
-    if (end_disk == start_disk) {
-        printf("ENTERED IF \n");
-        printf("BUFFER %s\n", buffer);
-        printf("NBYTES: %d\n", nbytes);
-        memcpy(wptr, buffer, nbytes);
-        msync(image, image_size, MS_SYNC);
-    } else {
-        int first = UFS_BLOCK_SIZE - start_offset;
-        memcpy(wptr, buffer, first);
-        void *eptr = image + inode.direct[end_disk] * UFS_BLOCK_SIZE;
-        memcpy(eptr, buffer, nbytes - first);
-        msync(image, image_size, MS_SYNC);
-    }
+    // printf("start_disk: %d\n", start_disk);
+    // printf("start_offset: %d\n", start_offset);
+    // void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
+    // printf("POINTER: %p\n", wptr);
+    // if (end_disk == start_disk) {
+    //     printf("ENTERED IF \n");
+    //     printf("BUFFER %s\n", buffer);
+    //     printf("NBYTES: %d\n", nbytes);
+    //     memcpy(wptr, buffer, nbytes);
+    //     msync(image, image_size, MS_SYNC);
+    // } else {
+    //     int first = UFS_BLOCK_SIZE - start_offset;
+    //     memcpy(wptr, buffer, first);
+    //     void *eptr = image + inode.direct[end_disk] * UFS_BLOCK_SIZE;
+    //     memcpy(eptr, buffer, nbytes - first);
+    //     msync(image, image_size, MS_SYNC);
+    // }
+    // int start = offset / 4096;
+    printf("Inode.direct[start_Disk] in write: %d\n", inode.direct[start_disk]);
+    printf("Offset in write: %x\n", inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
+    pwrite(fd, buffer, nbytes, inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
+    
 
     msg.return_code = 0;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+    fsync(fd);
     return 0;
 }
 
@@ -404,29 +425,42 @@ int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr
     inode_t inode = inode_table[inum];
 
     int start_disk = offset/4096;
-    int start_offset = offset % 4096;
-    int end_disk = (offset+nbytes)/4096;
-    int end_offset = (offset+nbytes)%4096;
-    if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
+    int block_off = offset % 4096;
+    // int start_offset = offset % 4096;
+    // int end_disk = (offset+nbytes)/4096;
+    // int end_offset = (offset+nbytes)%4096;
+    // if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
+    //     return -1;
+    // }
+
+    // void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
+    // void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
+    // if (end_disk == start_disk) {
+    //     memcpy(buffer, wptr, nbytes);
+    // } else {
+    //     int first = UFS_BLOCK_SIZE - start_offset;
+    //     memcpy(buffer, wptr, first);
+    //     void *eptr = image + end_disk * UFS_BLOCK_SIZE;
+    //     void *bufoff = buffer + first;
+    //     memcpy(bufoff, eptr, nbytes - first);
+    // }
+
+    if(inode.direct[start_disk] == -1) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
     }
 
-    // void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
-    void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
-    if (end_disk == start_disk) {
-        memcpy(buffer, wptr, nbytes);
-    } else {
-        int first = UFS_BLOCK_SIZE - start_offset;
-        memcpy(buffer, wptr, first);
-        void *eptr = image + end_disk * UFS_BLOCK_SIZE;
-        void *bufoff = buffer + first;
-        memcpy(bufoff, eptr, nbytes - first);
-    }
+
+    printf("INODE.DIRECT[START_DISK]: %d\n", inode.direct[start_disk]);
+
+    pread(fd, msg.buffer, nbytes, inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
+    
 
     msg.return_code = 0;
-    memcpy(msg.buffer, &buffer, nbytes);
+    // memcpy(msg.buffer, &buffer, nbytes);
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
-    
+    fsync(fd);
     return 0;
 
     // CHECK MATH AND EDGE CASES
@@ -503,7 +537,7 @@ int main(int argc, char *argv[]) {
         port = atoi(argv[1]);
     }
     if(argc > 2) {
-        fd = open(argv[2], O_RDWR | O_APPEND);
+        fd = open(argv[2], O_RDWR);
     } else{
         printf("image does not exist\n");
     }
@@ -541,7 +575,7 @@ int main(int argc, char *argv[]) {
         // char message[BUFFER_SIZE];
         client_message_t msg;
         printf("server:: waiting...\n");
-        int rc = UDP_Read(sd, &addr, (char*)&msg, BUFFER_SIZE);
+        int rc = UDP_Read(sd, &addr, (char*)&msg, sizeof(msg));
         // printf("Message from client: %d\n", msg.msg_type);
         if (rc > 0) {
             // add some code to interpret message
@@ -551,7 +585,7 @@ int main(int argc, char *argv[]) {
             {
             case MSG_LOOKUP:
                 //printf("Lookin up from server\n");
-                printf("FROM SWITHC STATEMENT: %s\n", msg.lookup.name);
+                printf("FROM SWITCH STATEMENT: %s\n", msg.lookup.name);
                 Lookup(message.lookup.pinum, msg.lookup.name, addr);
                 break;
             case MSG_CREATE:
@@ -559,6 +593,7 @@ int main(int argc, char *argv[]) {
                 Create(message.create.pinum, message.create.type, message.create.name, addr);
                 break;
             case MSG_WRITE:
+                printf("ABOUT TO CALL WRITE. NBYTES: %d OFFSET: %d\n", message.write.nbytes, message.write.offset);
                 Write(message.write.inum, message.write.buffer, message.write.offset, message.write.nbytes, addr);
                 break;
             case MSG_STAT:
