@@ -143,7 +143,7 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
     return -1;
 }
 
-int Lookup_helper(int pinum, char* name, struct sockaddr_in addr) {
+int Lookup_helper(int pinum, char* name) {
     if(valid_inum(pinum) == 0) {
         return -1;
     }
@@ -264,7 +264,7 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
         return -1;
     }
     // check if file/directory already exists
-    if(Lookup_helper(pinum, name, addr) != -1) {
+    if(Lookup_helper(pinum, name) != -1) {
         msg.return_code = 0;
         UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
         return 0;
@@ -509,8 +509,92 @@ int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr
     // }
 }
 
-void Unlink(int pinum, char *name) {
-    
+int directory_empty(int inum) {
+    inode_t inode = inode_table[inum];
+    if(inode.type != MFS_DIRECTORY) { // check if directory
+        return 0;
+    }
+    dir_block_t* dir_block;
+    int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
+    dir_ent_t * entry;
+    int allocated = 0;
+    for(int i = 0; i< DIRECT_PTRS; i++) {
+        if(inode.direct[i] == -1) {
+            continue;
+        }
+        dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
+        // loop through directory data block for each directory entry
+        for(int i = 0; i <= num_dir_entries; i++) {
+            entry = (dir_ent_t*)&(*dir_block).entries[i];
+            // if found match
+            if(entry->inum != -1){
+                allocated++;
+            }
+        }
+
+    }
+    if(allocated > 2) {
+        return -1;
+    }
+    return 0;
+}
+
+int Unlink(int pinum, char *name, struct sockaddr_in addr) {
+    server_message_t msg;
+    // check if valid inum
+    if(valid_inum(pinum)==-1) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+        return -1;
+    }
+
+    inode_t inode = inode_table[pinum];
+    if(inode.type != MFS_DIRECTORY) { // check if directory
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
+        return -1;
+    }
+    // printf("GOT DIRECTORY\n");
+    // loop through each directory data block and find empty spot
+    dir_block_t* dir_block;
+    int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
+    dir_ent_t * entry;
+    for(int i = 0; i< DIRECT_PTRS; i++) {
+        if(inode.direct[i] == -1) {
+            continue;
+        }
+
+        // dir_block = (dir_block_t*)inode.direct[i];
+        // memcpy(dir_block, &inode.direct[i], sizeof(unsigned int));
+        if (debug == 1) printf("HERE\n");
+        dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
+        // loop through directory data block for each directory entry
+        for(int i = 0; i <= num_dir_entries; i++) {
+            entry = (dir_ent_t*)&(*dir_block).entries[i];
+            // if found match
+            if(strcmp(entry->name, name)==0) {
+                if(directory_empty(entry->inum) == 0){
+                    // return success
+                    entry->inum = -1;
+                    msync(image, image_size, MS_SYNC);
+                    msg.return_code = 0;
+                    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+                    return 0;
+                } else{
+                    // return failure
+                    msg.return_code = -1;
+                    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+                    return -1;
+                }
+            }
+        }
+
+    }
+
+    // check if directory is empty
+    msg.return_code = 0;
+    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+    return 0;
 }
 
 void Shutdown(struct sockaddr_in addr) {
@@ -604,7 +688,7 @@ int main(int argc, char *argv[]) {
                 Read(message.read.inum, message.read.buffer, message.read.offset, message.read.nbytes, addr);
                 break;
             case MSG_UNLINK:
-                Unlink(message.unlink.pinum, message.unlink.name);
+                Unlink(message.unlink.pinum, message.unlink.name, addr);
                 break;
             case MSG_SHUTDOWN:
                 printf("SHUTDOWN from server\n");
