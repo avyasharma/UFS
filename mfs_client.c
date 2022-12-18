@@ -43,14 +43,14 @@ int MFS_Lookup(int pinum, char *name) {
 
     message.msg_type = MSG_LOOKUP;
     message.lookup.pinum =  pinum;
-    strncpy(message.lookup.name, name, strlen(name));
-    printf("SENDING MESSAGE TO LOOKUP FILE\n");
+    strcpy(message.lookup.name, name);
+    printf("SENDING MESSAGE TO LOOKUP FILE... looking for %s\n", message.lookup.name);
     int rc = UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
     
     struct sockaddr_in ret_addy;
     int rc_ret = UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
     printf("Return code: %d\n", response.return_code);
-    printf("Return code: %d\n", response.stat.inode);
+    printf("Inode found: %d\n", response.stat.inode);
     return response.stat.inode;
 }
 
@@ -156,7 +156,7 @@ int MFS_Creat(int pinum, int type, char *name) {
     message.msg_type = MSG_CREATE;
     message.create.pinum = pinum;
     message.create.type = type;
-    strncpy(message.create.name, name, strlen(name));
+    strcpy(message.create.name, name);
     printf("SENDING MESSAGE TO CREATE FILE\n");
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
     printf("DONE WRITING\n");

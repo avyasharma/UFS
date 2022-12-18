@@ -7,21 +7,26 @@
 
 // client code
 int main(int argc, char *argv[]) {
-    MFS_Init("localhost", 10000);
+    MFS_Init("localhost", 10001);
 
     // printf("Creating blank dir: %d\n",MFS_Creat(1,0,'dir1'));
     // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
     printf("INITALIZED\n");
 
+<<<<<<< HEAD
     int rc = MFS_Creat(0, MFS_DIRECTORY, "test");
     int inum = MFS_Lookup(0, "test");
+=======
+    int rc = MFS_Creat(0, MFS_REGULAR_FILE, "file");
+    int inum = MFS_Lookup(0, "file");
+>>>>>>> 620344f (Fixed create and lookup)
 
     printf("Client side inum: %d\n", inum);
 
     MFS_Write(inum, "OINKY", 0, sizeof("OINKY"));
 
-    char *buffer = malloc(8 * sizeof(char));
-    MFS_Read(inum, buffer, 0, sizeof("OINKY"));
+    // char *buffer = malloc(8 * sizeof(char));
+    // MFS_Read(inum, buffer, 0, sizeof("OINKY"));
 
     MFS_Shutdown();
     printf("SHUTDOWN\n");

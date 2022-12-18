@@ -41,7 +41,7 @@ unsigned int find_free_inode() {
     unsigned int * inode_bitmap_ptr = image + (*s).inode_bitmap_addr * UFS_BLOCK_SIZE;
     int num_inodes = (*s).inode_bitmap_len*4096;
     int byte, offset, bit;
-    for(int inum = 0; inum< num_inodes; inum++) {
+    for(int inum = 0; inum < num_inodes; inum++) {
         byte = inode_bitmap_ptr[inum/32];
         offset = 31 - (inum % 32);
         bit = (byte >> offset) & 1;
@@ -70,7 +70,7 @@ unsigned int find_free_block() {
 }
 
 int Lookup(int pinum, char* name, struct sockaddr_in addr) {
-    if (debug == 3) printf("LOOKUP STARTS HERE...\n");
+    printf("LOOKUP STARTS HERE...finding %s\n", name);
     // check if pinum is valid
     if(valid_inum(pinum) == 0) {
         return -1;
@@ -84,7 +84,7 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
     // loop through each directory data block
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
-    dir_ent_t entry;
+    dir_ent_t * entry;
     for(int i = 0; i< DIRECT_PTRS; i++) {
         // printf("Checking for allocation\n");
         if(inode.direct[i] == -1) {
@@ -94,25 +94,26 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
         // dir_block = (dir_block_t*)dir_ptr;
         if (debug == 3) printf("Getting the data block\n");
         // memcpy(&dir_block, &inode.direct[i], sizeof(unsigned int));
-        dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
+        dir_block = (dir_block_t*)(image + inode.direct[i] * UFS_BLOCK_SIZE);
         // dir_block = (dir_block_t*) *inode.direct[i];
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
-            if (debug == 1) printf("Currently looping through...\n");
+            //printf("Currently looping through...\n");
             // entry = (dir_ent_t)(*dir_block).entries[i];
             //printf("dir_block %p\n", dir_block);
-            entry = (dir_ent_t)(dir_block->entries[i]);
+            entry = (dir_ent_t*)&(dir_block->entries[i]);
+            //printf("DIR ENTRY: %d, %s\n", entry->inum, entry->name);
             //printf("Got the current entry...\n");
             // check if name match
-            if (strcmp(entry.name, name)==0) {
-                if (debug == 3) printf("Match found..\n"); 
-                if(entry.inum != -1) {
-                    if (debug == 3) printf("Return code writing\n");
+            if (strcmp(entry->name, name)==0) {
+                printf("Match found..\n"); 
+                if(entry->inum != -1) {
+                    printf("Return code writing\n");
                     server_message_t msg;
                     msg.return_code = 0;
-                    msg.stat.inode = entry.inum;
+                    msg.stat.inode = entry->inum;
                     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));    
-                    return entry.inum;
+                    return entry->inum;
                 }
             }
         }
@@ -127,7 +128,6 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
 }
 
 int Lookup_helper(int pinum, char* name, struct sockaddr_in addr) {
-    // check if pinum is valid
     if(valid_inum(pinum) == 0) {
         return -1;
     }
@@ -140,36 +140,37 @@ int Lookup_helper(int pinum, char* name, struct sockaddr_in addr) {
     // loop through each directory data block
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
-    dir_ent_t entry;
+    dir_ent_t * entry;
     for(int i = 0; i< DIRECT_PTRS; i++) {
-        //printf("Checking for allocation\n");
+        // printf("Checking for allocation\n");
         if(inode.direct[i] == -1) {
             continue;
         }
         // dir_ptr = (void*)inode.direct[i];
         // dir_block = (dir_block_t*)dir_ptr;
-        //printf("Getting the data block\n");
+        printf("Getting the data block\n");
         // memcpy(&dir_block, &inode.direct[i], sizeof(unsigned int));
-        dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
+        dir_block = (dir_block_t*)(image + inode.direct[i] * UFS_BLOCK_SIZE);
         // dir_block = (dir_block_t*) *inode.direct[i];
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
             //printf("Currently looping through...\n");
             // entry = (dir_ent_t)(*dir_block).entries[i];
             //printf("dir_block %p\n", dir_block);
-            entry = (dir_ent_t)(dir_block->entries[i]);
+            entry = (dir_ent_t*)&(dir_block->entries[i]);
+            //printf("DIR ENTRY: %d, %s\n", entry->inum, entry->name);
             //printf("Got the current entry...\n");
             // check if name match
-            if (strcmp(entry.name, name)==0) { 
-                if(entry.inum != -1) {
-                    //printf("Return code writing\n");
-                    return entry.inum;
+            
+            if (strcmp(entry->name, name)==0) {
+                printf("Match found..\n"); 
+                if(entry->inum != -1) {  
+                    return entry->inum;
                 }
             }
         }
 
     }
-
     return -1;
 }
 
@@ -182,15 +183,15 @@ int create_new(int pinum, int type){
     // find inum of a free inode
     int inum = find_free_inode();
     // get inode
-    inode_t inode = inode_table[inum];
-    inode.type = type;
-    inode.size = sizeof(unsigned int);
+    inode_t* inode = &inode_table[inum];
+    inode->type = type;
+    inode->size = sizeof(unsigned int);
     // find a free data block
     unsigned int data_block = find_free_block();
-    inode.direct[0] = data_block;
+    inode->direct[0] = data_block;
     // fill rest of inode with unused
     for(int i = 1; i< DIRECT_PTRS; i++) {
-        inode.direct[i] = -1;
+        inode->direct[i] = -1;
     }
     if(type == MFS_DIRECTORY) {
         // initialize directory data block
@@ -224,7 +225,9 @@ int create_new(int pinum, int type){
 }
 
 int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
-    if (debug) printf("STARTING CREATE\n");
+    server_message_t msg;
+    msg.return_code = -1;
+    printf("STARTING CREATE\n");
     // check if name is too long
     if(strlen(name) > 28) {
         return -1;
@@ -235,6 +238,8 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
     }
     // check if file/directory already exists
     if(Lookup_helper(pinum, name, addr) != -1) {
+        msg.return_code = 0;
+        UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
         return 0;
     }
     if (debug) printf("PASSED CHECKS\n");
@@ -248,9 +253,7 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
     // loop through each directory data block and find empty spot
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
-    dir_ent_t entry;
-    server_message_t msg;
-    msg.return_code = -1;
+    dir_ent_t * entry;
     for(int i = 0; i< DIRECT_PTRS; i++) {
         if(inode.direct[i] == -1) {
             continue;
@@ -262,12 +265,15 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
         dir_block = image + inode.direct[i] * UFS_BLOCK_SIZE;
         // loop through directory data block for each directory entry
         for(int i = 0; i <= num_dir_entries; i++) {
-            entry = (dir_ent_t)(*dir_block).entries[i];
+            entry = (dir_ent_t*)&(*dir_block).entries[i];
             // if found empty directory entry
-            if(entry.inum == -1) {
-                strcpy(entry.name, name);
-                entry.inum = create_new(pinum, type);
-                if (debug == 1) printf("INUM CREATED :%d\n", entry.inum);
+            if(entry->inum == 2) {
+                printf("INUM 2 FOUND\n");
+            }
+            if(entry->inum == -1) {
+                strcpy(entry->name, name);
+                entry->inum = create_new(pinum, type);
+                printf("INUM CREATED :%d\n", entry->inum);
                 msg.return_code = 0;
                 msync(image, image_size, MS_SYNC);
                 break;
@@ -317,13 +323,13 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     // pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
     void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
     if (end_disk == start_disk) {
-        memcpy(&wptr, &buffer, nbytes);
+        memcpy(wptr, &buffer, nbytes);
         msync(image, image_size, MS_SYNC);
     } else {
         int first = UFS_BLOCK_SIZE - start;
-        memcpy(&wptr, &buffer, first);
+        memcpy(wptr, &buffer, first);
         void *eptr = image + end_disk * UFS_BLOCK_SIZE;
-        memcpy(&eptr, &buffer, nbytes - first);
+        memcpy(eptr, &buffer, nbytes - first);
         msync(image, image_size, MS_SYNC);
     }
 
@@ -504,7 +510,8 @@ int main(int argc, char *argv[]) {
             {
             case MSG_LOOKUP:
                 //printf("Lookin up from server\n");
-                Lookup(message.lookup.pinum, message.lookup.name, addr);
+                printf("FROM SWITHC STATEMENT: %s\n", msg.lookup.name);
+                Lookup(message.lookup.pinum, msg.lookup.name, addr);
                 break;
             case MSG_CREATE:
                 if (debug == 1) printf("CREATE from server\n");
