@@ -13,6 +13,22 @@ int main(int argc, char *argv[]) {
     // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
     printf("INITALIZED\n");
 
+    char buf[4096] = {0};
+    buf[4095] = 1;
+    buf[0] = 1;
+
+    MFS_Creat(0, MFS_REGULAR_FILE, "test");
+    int inum = MFS_Lookup(0, "test");
+
+    for (int i = 0; i < 30; i++) {
+        MFS_Write(inum, buf, i * MFS_BLOCK_SIZE, MFS_BLOCK_SIZE);
+    }
+
+    for (int i = 0; i < 30; i++) {
+        MFS_Read(inum, buf, i * MFS_BLOCK_SIZE, MFS_BLOCK_SIZE);
+    }
+
+    /*
     int rc = MFS_Creat(0, MFS_REGULAR_FILE, "file1");
     int inum = MFS_Lookup(0, "file1");
     printf("inode: %d\n", inum);
@@ -25,15 +41,17 @@ int main(int argc, char *argv[]) {
 
     free(m);
 
-    // printf("Client side inum: %d\n", inum);
+    printf("Client side inum: %d\n", inum);
 
-    // printf("SIZEOF OINK: %ld\n", sizeof("OINK"));
-    // MFS_Write(inum, "OINK", 0, sizeof("OINK"));
+    printf("SIZEOF OINK: %ld\n", sizeof("OINK"));
+    MFS_Write(inum, "OINK", 0, sizeof("OINK"));
 
-    // char *buffer = malloc(8 * sizeof(char));
-    // MFS_Read(inum, buffer, 0, sizeof("OINK"));
-    // printf("BUFFER: %s\n", buffer);
-    // free(buffer);
+    char *buffer = malloc(8 * sizeof(char));
+    MFS_Read(inum, buffer, 0, sizeof("OINK"));
+    printf("BUFFER: %s\n", buffer);
+    free(buffer);
+
+    */
     MFS_Shutdown();
     printf("SHUTDOWN\n");
 

@@ -23,6 +23,7 @@ int debug = 0;
 
 int valid_inum(int inum) {
     // get pointer to bitmap
+    printf("FAILING VALID INUM\n");
     unsigned int * inode_bitmap_ptr = image + s->inode_bitmap_addr * UFS_BLOCK_SIZE;
     // check if inode number is out of range
     int blocks = inum/4096;
@@ -75,7 +76,7 @@ unsigned int find_free_block() {
         // bit = (byte >> offset) & 1;
         bit = get_bit(data_bitmap_ptr, idx);
         if(bit != 1) {
-            data_bitmap_ptr[idx/32] = byte | (1 << offset);
+            // data_bitmap_ptr[idx/32] = byte | (1 << offset);
             set_bit(data_bitmap_ptr, idx);
             return idx+(*s).data_region_addr;
         }
@@ -95,7 +96,7 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
 
     // get directory
     inode_t inode = inode_table[pinum];
-    if(inode.type != MFS_DIRECTORY) { // check if directory
+    if(inode.type == MFS_REGULAR_FILE) { // check if directory
         UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
         return -1;
     }
@@ -325,6 +326,7 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     server_message_t msg;
     // check if valid inum
     if(valid_inum(inum)==-1) {
+        printf("Failed here 1\n");
         msg.return_code = -1;
         UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
@@ -333,11 +335,12 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     if (debug == 1) printf("PASSED CHECKER 1\n");
     // get directory
     if (debug == 1) printf("inum: %d\n", inum);
-    inode_t inode = inode_table[inum];
+    inode_t* inode = &inode_table[inum];
     // check if regular file
-    if (debug == 1) printf("Inode Type: %d\n", inode.type);
+    if (debug == 1) printf("Inode Type: %d\n", inode->type);
     if (debug == 1) printf("Printed type\n");
-    if(inode.type != UFS_REGULAR_FILE) { // check if directory
+    if(inode->type != UFS_REGULAR_FILE) { // check if directory
+        printf("Failed here 3 %d\n", inum);
         msg.return_code = -1;
         UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
@@ -346,6 +349,7 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     if (debug == 1) printf("PASSED CHECKER 2\n");
     // check invalid nbytes
     if(nbytes > 4096 || nbytes<0) {
+        printf("Failed here 2\n");
         msg.return_code = -1;
         UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
@@ -364,10 +368,17 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     // void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
 
     // check if data block has been allocated
-    if(inode.direct[start_disk] == -1) {
-        inode.direct[start_disk] = find_free_block();
+    if (start_disk >= DIRECT_PTRS) 
+    {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+        return -1;
     }
-    inode_table[inum].size = nbytes + offset;
+
+    if(inode->direct[start_disk] == -1) {
+        inode->direct[start_disk] = find_free_block();
+    }
+    inode->size = nbytes + offset;
     // printf("start_disk: %d\n", start_disk);
     // printf("start_offset: %d\n", start_offset);
     // void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
@@ -386,10 +397,12 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     //     msync(image, image_size, MS_SYNC);
     // }
     // int start = offset / 4096;
-    printf("Inode.direct[start_Disk] in write: %d\n", inode.direct[start_disk]);
-    printf("Offset in write: %x\n", inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
-    pwrite(fd, buffer, nbytes, inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
-    
+    printf("Inode.direct[%d] in write: %d\n", start_disk, inode->direct[start_disk]);
+    printf("Offset in write: %x\n", inode->direct[start_disk] * UFS_BLOCK_SIZE + block_off);
+    //pwrite(fd, buffer, nbytes, inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
+    char* dest =(char*)image + inode->direct[start_disk] * UFS_BLOCK_SIZE + block_off;
+    memcpy(dest, buffer, nbytes);
+    msync(dest, nbytes, MS_SYNC);
 
     msg.return_code = 0;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
@@ -452,6 +465,7 @@ int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr
     printf("START READ\n");
     server_message_t msg;
     if (!valid_inum(inum) || offset < 0 || nbytes < 0 || nbytes > 4096) {
+        printf("Failed parameter check\n");
         msg.return_code = -1;
         UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
@@ -482,15 +496,23 @@ int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr
     // }
 
     if(inode.direct[start_disk] == -1) {
+        printf("Failed unallocated\n");
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+        return -1;
+    }
+    if(start_disk >= DIRECT_PTRS) {
         msg.return_code = -1;
         UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
     }
 
 
-    printf("INODE.DIRECT[START_DISK]: %d\n", inode.direct[start_disk]);
+    printf("INODE.DIRECT[%d]: %d\n", start_disk, inode.direct[start_disk]);
 
-    pread(fd, msg.buffer, nbytes, inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
+    // pread(fd, msg.buffer, nbytes, inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off);
+    memcpy(msg.buffer, ((char*)image + inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off), nbytes);
+    memcpy(buffer, ((char*)image + inode.direct[start_disk] * UFS_BLOCK_SIZE + block_off), nbytes);
     
 
     msg.return_code = 0;
@@ -642,8 +664,7 @@ void Shutdown(struct sockaddr_in addr) {
     server_message_t msg;
     msg.return_code = 0;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
-    fsync(fd);
-    //msync(image, image_size, MS_SYNC);
+    msync(image, image_size, MS_SYNC);
     close(fd);
     exit(0);
 }
@@ -726,6 +747,7 @@ int main(int argc, char *argv[]) {
                 Stat(message.stat.inum, message.stat.m, addr);
                 break;
             case MSG_READ:
+                printf("ABOUT TO CALL READ. INUM: %d NBYTES: %d OFFSET: %d\n", message.read.inum, message.read.nbytes, message.read.offset);
                 Read(message.read.inum, message.read.buffer, message.read.offset, message.read.nbytes, addr);
                 break;
             case MSG_UNLINK:

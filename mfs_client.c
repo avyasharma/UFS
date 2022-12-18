@@ -135,14 +135,18 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
     server_message_t response;
 
     if (inum < 0) {
+        printf("PASSED CLIENT READ 1\n");
         return -1;
     }
     if (nbytes > 4096) {
+        printf("PASSED CLIENT READ 2\n");
         return -1;
     }
     if (offset < 0) {
+        printf("PASSED CLIENT READ 3\n");
         return -1;
     }
+
 
     message.msg_type = MSG_READ;
     message.stat.inum = inum;
@@ -150,6 +154,7 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
     message.read.offset = offset;
     message.read.nbytes = nbytes;
 
+    printf("Sending MSG_READ to server\n");
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
 
     struct sockaddr_in ret_addy;
@@ -226,6 +231,6 @@ int MFS_Shutdown() {
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
     //exit(0);
-    //UDP_Close(fd);
+    UDP_Close(fd);
     return response.return_code;
 }
