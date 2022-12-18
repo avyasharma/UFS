@@ -365,9 +365,9 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
 
     // check if data block has been allocated
     if(inode.direct[start_disk] == -1) {
-        inode.size = UFS_BLOCK_SIZE;
         inode.direct[start_disk] = find_free_block();
     }
+    inode_table[inum].size = nbytes + offset;
     // printf("start_disk: %d\n", start_disk);
     // printf("start_offset: %d\n", start_offset);
     // void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
