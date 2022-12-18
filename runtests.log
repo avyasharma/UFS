@@ -1,0 +1,206 @@
+('starting', 'build')
+
+**********************************************************************
+
+Test build
+build project using make
+
+**********************************************************************
+Trying to build project using make
+make
+gcc -fPIC -shared mfs_client.c udp.c -o libmfs.so
+
+
+test build PASSED
+ (build project using make)
+
+('starting', 'shutdown')
+
+**********************************************************************
+
+Test shutdown
+init server and client then call shutdown
+
+**********************************************************************
+total blocks        36
+  inodes            32 [size of each: 128]
+  data blocks       32
+layout details
+  inode bitmap address/len 1 [1]
+  data bitmap address/len  2 [1]
+Starting server on port 7877
+/tmp/tmpejSA0p/p/server 7877 /home/sharma/UFS/test.img
+SERVER STARTED
+server:: waiting...
+SHUTDOWN from server
+
+
+test shutdown PASSED
+ (init server and client then call shutdown)
+
+('starting', 'creat')
+
+**********************************************************************
+
+Test creat
+creat a file and check with lookup
+
+**********************************************************************
+total blocks        36
+  inodes            32 [size of each: 128]
+  data blocks       32
+layout details
+  inode bitmap address/len 1 [1]
+  data bitmap address/len  2 [1]
+Starting server on port 8560
+/tmp/tmpejSA0p/p/server 8560 /home/sharma/UFS/test.img
+SERVER STARTED
+server:: waiting...
+STARTING CREATE
+BEFORE LOOKUP HELPER
+Getting the data block
+AFTER LOOKUP HELPER
+INODE TYPE: 0, SIZE: 64
+, INUM: 0GOT DIRECTORY
+INDING FREE INODE
+FOUND FREE INODE
+FOUND FREE BLOCK
+INUM CREATED :1
+server:: waiting...
+FROM SWITCH STATEMENT: test
+LOOKUP STARTS HERE...finding test
+DIR ENTRY: 0, .
+DIR ENTRY: 0, ..
+DIR ENTRY: 1, test
+Match found..
+Return code writing
+server:: waiting...
+SHUTDOWN from server
+SENDING MESSAGE TO CREATE FILE
+DONE WRITING
+FINISHED
+Return code: 0
+SENDING MESSAGE TO LOOKUP FILE... looking for test
+Return code: 0
+Inode found: 1
+
+
+test creat PASSED
+ (creat a file and check with lookup)
+
+('starting', 'write')
+
+**********************************************************************
+
+Test write
+write then read one block
+
+**********************************************************************
+total blocks        36
+  inodes            32 [size of each: 128]
+  data blocks       32
+layout details
+  inode bitmap address/len 1 [1]
+  data bitmap address/len  2 [1]
+Starting server on port 8710
+/tmp/tmpejSA0p/p/server 8710 /home/sharma/UFS/test.img
+SERVER STARTED
+server:: waiting...
+STARTING CREATE
+BEFORE LOOKUP HELPER
+Getting the data block
+AFTER LOOKUP HELPER
+INODE TYPE: 0, SIZE: 64
+, INUM: 0GOT DIRECTORY
+INDING FREE INODE
+FOUND FREE INODE
+FOUND FREE BLOCK
+INUM CREATED :1
+server:: waiting...
+FROM SWITCH STATEMENT: test
+LOOKUP STARTS HERE...finding test
+DIR ENTRY: 0, .
+DIR ENTRY: 0, ..
+DIR ENTRY: 1, test
+Match found..
+Return code writing
+server:: waiting...
+ABOUT TO CALL WRITE. NBYTES: 4096 OFFSET: 0
+WRITE STARTED
+NBYTES FROM WRITE 4096
+OFFSET FROM WRITE 0
+Inode.direct[start_Disk] in write: 5
+Offset in write: 5000
+server:: waiting...
+START READ
+INODE.DIRECT[START_DISK]: 5
+server:: waiting...
+SHUTDOWN from server
+SENDING MESSAGE TO CREATE FILE
+DONE WRITING
+FINISHED
+Return code: 0
+SENDING MESSAGE TO LOOKUP FILE... looking for test
+Return code: 0
+Inode found: 1
+ABOUT TO CALL WRITE. BUFFER: START BLOCK 1
+NBYTES IN MFS CLIENT :4096
+OFFSET IN MFS CLIENT :0
+Write return code: 0
+READ Return code: 0
+BUFFER in MFS_READ: START BLOCK 1
+('START BLOCK 1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00END BLOCK 1')
+('START BLOCK 1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00END BLOCK 1')
+
+
+test write PASSED
+ (write then read one block)
+
+('starting', 'stat')
+
+**********************************************************************
+
+Test stat
+stat a regular file
+
+**********************************************************************
+total blocks        36
+  inodes            32 [size of each: 128]
+  data blocks       32
+layout details
+  inode bitmap address/len 1 [1]
+  data bitmap address/len  2 [1]
+Starting server on port 8874
+/tmp/tmpejSA0p/p/server 8874 /home/sharma/UFS/test.img
+SENDING MESSAGE TO CREATE FILE
+DONE WRITING
+FINISHED
+Return code: 0
+SENDING MESSAGE TO LOOKUP FILE... looking for test
+Return code: 0
+Inode found: 1
+Response type: 0
+Response size: 64
+Response inum: 0
+m type: 0
+Response type: 1
+Response size: 0
+Response inum: 1
+m type: 1
+ABOUT TO CALL WRITE. BUFFER: START BLOCK 1
+NBYTES IN MFS CLIENT :4096
+OFFSET IN MFS CLIENT :0
+Write return code: 0
+Response type: 1
+Response size: 0
+Response inum: 1
+m type: 1
+Failure: Stat gave wrong size
+
+
+test stat FAILED
+ (stat a regular file)
+ Stat gave wrong size
+
+Skipped 14 tests.
+To keep testing after failing a test, use flag '-c' or '--continue'

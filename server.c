@@ -203,7 +203,7 @@ int create_new(int pinum, int type){
     // get inode
     inode_t* inode = &inode_table[inum];
     inode->type = type;
-    inode->size = sizeof(unsigned int);
+    inode->size = 0;
     // find a free data block
     unsigned int data_block = find_free_block();
     printf("FOUND FREE BLOCK\n");
@@ -213,6 +213,7 @@ int create_new(int pinum, int type){
         inode->direct[i] = -1;
     }
     if(type == MFS_DIRECTORY) {
+        inode->size = 2 * sizeof(dir_ent_t);
         // initialize directory data block
         // dir_block_t* block = (dir_block_t *)data_block;
         dir_block_t* block = image + data_block*UFS_BLOCK_SIZE;
@@ -364,6 +365,7 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
 
     // check if data block has been allocated
     if(inode.direct[start_disk] == -1) {
+        inode.size = UFS_BLOCK_SIZE;
         inode.direct[start_disk] = find_free_block();
     }
     // printf("start_disk: %d\n", start_disk);
