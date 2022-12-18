@@ -13,21 +13,18 @@ int main(int argc, char *argv[]) {
     // printf("Looking up blank dir: %d\n",MFS_Lookup(0,'dir1'));
     printf("INITALIZED\n");
 
-<<<<<<< HEAD
-    int rc = MFS_Creat(0, MFS_DIRECTORY, "test");
-    int inum = MFS_Lookup(0, "test");
-=======
     int rc = MFS_Creat(0, MFS_REGULAR_FILE, "file");
     int inum = MFS_Lookup(0, "file");
->>>>>>> 620344f (Fixed create and lookup)
 
     printf("Client side inum: %d\n", inum);
 
+    printf("SIZEOF OINKY: %ld\n", sizeof("OINKY"));
     MFS_Write(inum, "OINKY", 0, sizeof("OINKY"));
 
-    // char *buffer = malloc(8 * sizeof(char));
-    // MFS_Read(inum, buffer, 0, sizeof("OINKY"));
-
+    char *buffer = malloc(8 * sizeof(char));
+    MFS_Read(inum, buffer, 0, sizeof("OINKY"));
+    printf("BUFFER: %s\n", buffer);
+    free(buffer);
     MFS_Shutdown();
     printf("SHUTDOWN\n");
 

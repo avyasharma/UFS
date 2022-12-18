@@ -50,6 +50,9 @@ int MFS_Lookup(int pinum, char *name) {
     struct sockaddr_in ret_addy;
     int rc_ret = UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
     printf("Return code: %d\n", response.return_code);
+    if(response.return_code == -1){
+        return -1;
+    }
     printf("Inode found: %d\n", response.stat.inode);
     return response.stat.inode;
 }
@@ -81,28 +84,32 @@ int MFS_Write(int inum, char *buffer, int offset, int nbytes) {
     client_message_t message;
     server_message_t response;
 
-    if (inum < 0) {
-        return -1;
-    }
-    if (nbytes > 4096) {
-        return -1;
-    }
-    if (offset < 0) {
-        return -1;
-    }
+    // if (inum < 0) {
+    //     return -1;
+    // }
+    // if (nbytes > 4096) {
+    //     return -1;
+    // }
+    // if (offset < 0) {
+    //     return -1;
+    // }
 
+    printf("TYPE assingd\n");
     message.msg_type = MSG_WRITE;
-    message.stat.inum = inum;
+    message.write.inum = inum;
+    printf("BEFORE MEMCPY\n");
     memcpy(message.write.buffer, buffer, nbytes);
     message.write.offset = offset;
     message.write.nbytes = nbytes;
-
+    printf("NBYTES IN MFS CLIENT :%d\n", message.write.nbytes);
+    printf("BEFORE ");
     UDP_Write(fd, &server_addr, (char*)&message, sizeof(message));
 
     struct sockaddr_in ret_addy;
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
-    if (!response.stat.type) {
+    printf("Write return code: %d", response.return_code);
+    if (response.return_code == -1) {
         return -1;
     }
     return 0;
@@ -124,7 +131,7 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
 
     message.msg_type = MSG_READ;
     message.stat.inum = inum;
-    memcpy(message.read.buffer, buffer, nbytes);
+    // memcpy(message.read.buffer, &buffer, nbytes);
     message.read.offset = offset;
     message.read.nbytes = nbytes;
 
@@ -133,9 +140,9 @@ int MFS_Read(int inum, char *buffer, int offset, int nbytes) {
     struct sockaddr_in ret_addy;
 
     UDP_Read(fd, &ret_addy, (char*)&response, sizeof(response));
-    if (!response.stat.type) {
-        // figure this out
-        return 0;
+    printf("READ Return code: %d\n", response.return_code);
+    if (response.return_code == -1) {
+        return -1;
     }
 
     memcpy(buffer, response.buffer, nbytes);

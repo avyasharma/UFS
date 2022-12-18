@@ -17,7 +17,7 @@ dir_ent_t* root_dir;
 int fd, port, sd;
 void * image;
 int image_size;
-int debug = 3;
+int debug = 1;
 
 // add function to lookup bitmap
 
@@ -63,24 +63,28 @@ unsigned int find_free_block() {
         bit = (byte >> offset) & 1;
         if(bit != 1) {
             data_bitmap_ptr[idx/32] = byte | (1 << offset);
-            return idx;
+            return idx+(*s).data_region_addr;
         }
     }
     return -1;
 }
 
 int Lookup(int pinum, char* name, struct sockaddr_in addr) {
+    server_message_t msg;
+    msg.return_code = -1;
     printf("LOOKUP STARTS HERE...finding %s\n", name);
     // check if pinum is valid
     if(valid_inum(pinum) == 0) {
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
     }
 
     // get directory
     inode_t inode = inode_table[pinum];
-    // if(inode.type != MFS_DIRECTORY) { // check if directory
-    //     return -1;
-    // }
+    if(inode.type != MFS_DIRECTORY) { // check if directory
+        UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
+        return -1;
+    }
     // loop through each directory data block
     dir_block_t* dir_block;
     int num_dir_entries = UFS_BLOCK_SIZE/sizeof(dir_ent_t);
@@ -102,14 +106,14 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
             // entry = (dir_ent_t)(*dir_block).entries[i];
             //printf("dir_block %p\n", dir_block);
             entry = (dir_ent_t*)&(dir_block->entries[i]);
-            //printf("DIR ENTRY: %d, %s\n", entry->inum, entry->name);
+            printf("DIR ENTRY: %d, %s\n", entry->inum, entry->name);
             //printf("Got the current entry...\n");
             // check if name match
             if (strcmp(entry->name, name)==0) {
                 printf("Match found..\n"); 
                 if(entry->inum != -1) {
                     printf("Return code writing\n");
-                    server_message_t msg;
+                    
                     msg.return_code = 0;
                     msg.stat.inode = entry->inum;
                     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));    
@@ -121,8 +125,6 @@ int Lookup(int pinum, char* name, struct sockaddr_in addr) {
     }
 
     if (debug == 3) printf("Sending stuff back :)\n");
-    server_message_t msg;
-    msg.return_code = -1;
     UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
     return -1;
 }
@@ -181,13 +183,17 @@ int create_new(int pinum, int type){
 
 
     // find inum of a free inode
+
+    printf("INDING FREE INODE\n");
     int inum = find_free_inode();
+    printf("FOUND FREE INODE\n");
     // get inode
     inode_t* inode = &inode_table[inum];
     inode->type = type;
     inode->size = sizeof(unsigned int);
     // find a free data block
     unsigned int data_block = find_free_block();
+    printf("FOUND FREE BLOCK\n");
     inode->direct[0] = data_block;
     // fill rest of inode with unused
     for(int i = 1; i< DIRECT_PTRS; i++) {
@@ -230,10 +236,16 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
     printf("STARTING CREATE\n");
     // check if name is too long
     if(strlen(name) > 28) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
         return -1;
     }
     // check if pinum is valid
+
+    printf("BEFORE LOOKUP HELPER\n");
     if(valid_inum(pinum)==-1) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
         return -1;
     }
     // check if file/directory already exists
@@ -242,11 +254,14 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
         UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
         return 0;
     }
+    printf("AFTER LOOKUP HELPER\n");
     if (debug) printf("PASSED CHECKS\n");
     // get directory
     inode_t inode = inode_table[pinum];
-    printf("INODE TYPE: %d, SIZE: %d\n", inode.type, inode.size);
+    printf("INODE TYPE: %d, SIZE: %d\n, INUM: %d", inode.type, inode.size, pinum);
     if(inode.type != MFS_DIRECTORY) { // check if directory
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (char*)&msg, BUFFER_SIZE);
         return -1;
     }
     printf("GOT DIRECTORY\n");
@@ -288,10 +303,15 @@ int Create(int pinum, int type, char* name, struct sockaddr_in addr) {
 }
 
 int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr) {
+    printf("WRITE STARTED\n");
+    printf("NBYTES FROM WRITE %d\n", nbytes);
+    printf("OFFSET FROM WRITE %d\n", offset);
     if (debug == 1) printf("Here, bitches\n");
     server_message_t msg;
     // check if valid inum
     if(valid_inum(inum)==-1) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
     }
     
@@ -303,33 +323,49 @@ int Write(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in add
     if (debug == 1) printf("Inode Type: %d\n", inode.type);
     if (debug == 1) printf("Printed type\n");
     if(inode.type != UFS_REGULAR_FILE) { // check if directory
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
     }
 
     if (debug == 1) printf("PASSED CHECKER 2\n");
     // check invalid nbytes
-    if(nbytes > 4096) {
+    if(nbytes > 4096 || nbytes<0) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
     }
     // check invalid offset
     int start_disk = offset/4096;
-    int start = offset % 4096;
+    int start_offset = offset % 4096;
     int end_disk = (offset+nbytes)/4096;
-    int end = (offset+nbytes)%4096;
+    int end_offset = (offset+nbytes)%4096;
     if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
         return -1;
     }
     if (debug == 1) printf("PASSED CHECKER 3\n");
     // pread(fd, &(d[i]), sizeof(MFS_DirEnt_t), start);
-    void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
+    // void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
+
+    // check if data block has been allocated
+    if(inode.direct[start_disk] == -1) {
+        inode.direct[start_disk] = find_free_block();
+    }
+    printf("start_disk: %d\n", start_disk);
+    printf("start_offset: %d\n", start_offset);
+    void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
+    printf("POINTER: %p\n", wptr);
     if (end_disk == start_disk) {
-        memcpy(wptr, &buffer, nbytes);
+        printf("ENTERED IF \n");
+        printf("BUFFER %s\n", buffer);
+        printf("NBYTES: %d\n", nbytes);
+        memcpy(wptr, buffer, nbytes);
         msync(image, image_size, MS_SYNC);
     } else {
-        int first = UFS_BLOCK_SIZE - start;
-        memcpy(wptr, &buffer, first);
-        void *eptr = image + end_disk * UFS_BLOCK_SIZE;
-        memcpy(eptr, &buffer, nbytes - first);
+        int first = UFS_BLOCK_SIZE - start_offset;
+        memcpy(wptr, buffer, first);
+        void *eptr = image + inode.direct[end_disk] * UFS_BLOCK_SIZE;
+        memcpy(eptr, buffer, nbytes - first);
         msync(image, image_size, MS_SYNC);
     }
 
@@ -356,10 +392,42 @@ int Stat(int inum, MFS_Stat_t *m, struct sockaddr_in addr) {
 }
 
 int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr) {
+    printf("START READ\n");
     server_message_t msg;
     if (!valid_inum(inum) || offset < 0 || nbytes < 0 || nbytes > 4096) {
+        msg.return_code = -1;
+        UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
         return -1;
     }
+
+
+    inode_t inode = inode_table[inum];
+
+    int start_disk = offset/4096;
+    int start_offset = offset % 4096;
+    int end_disk = (offset+nbytes)/4096;
+    int end_offset = (offset+nbytes)%4096;
+    if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
+        return -1;
+    }
+
+    // void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
+    void *wptr = image + inode.direct[start_disk]*UFS_BLOCK_SIZE + start_offset;
+    if (end_disk == start_disk) {
+        memcpy(buffer, wptr, nbytes);
+    } else {
+        int first = UFS_BLOCK_SIZE - start_offset;
+        memcpy(buffer, wptr, first);
+        void *eptr = image + end_disk * UFS_BLOCK_SIZE;
+        void *bufoff = buffer + first;
+        memcpy(bufoff, eptr, nbytes - first);
+    }
+
+    msg.return_code = 0;
+    memcpy(msg.buffer, &buffer, nbytes);
+    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
+    
+    return 0;
 
     // CHECK MATH AND EDGE CASES
 
@@ -404,33 +472,6 @@ int Read(int inum, char *buffer, int offset, int nbytes, struct sockaddr_in addr
     //         pread(fd, buffer, nbytes, inode.direct[i + 1] * UFS_BLOCK_SIZE);
     //     } 
     // }
-
-    inode_t inode = inode_table[inum];
-
-    int start_disk = offset/4096;
-    int start = offset % 4096;
-    int end_disk = (offset+nbytes)/4096;
-    int end = (offset+nbytes)%4096;
-    if(start_disk < 0 || end_disk >= DIRECT_PTRS) {
-        return -1;
-    }
-
-    void *wptr = image + start_disk * UFS_BLOCK_SIZE + start;
-    if (end_disk == start_disk) {
-        memcpy(&buffer, &wptr, nbytes);
-    } else {
-        int first = UFS_BLOCK_SIZE - start;
-        memcpy(&buffer, &wptr, first);
-        void *eptr = image + end_disk * UFS_BLOCK_SIZE;
-        void *bufoff = buffer + first;
-        memcpy(&bufoff, &eptr, nbytes - first);
-    }
-
-    msg.return_code = 0;
-    memcpy(msg.buffer, &buffer, nbytes);
-    UDP_Write(sd, &addr, (void *)&msg, sizeof(msg));
-    
-    return 0;
 }
 
 void Unlink(int pinum, char *name) {
