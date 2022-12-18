@@ -216,11 +216,11 @@ int create_new(int pinum, int type){
     if(type == MFS_DIRECTORY) {
         // initialize directory data block
         // dir_block_t* block = (dir_block_t *)data_block;
-        dir_block_t* block;
+        dir_block_t* block = image + data_block*UFS_BLOCK_SIZE;
 
         if (debug == 2) printf("Getting directory\n");
 
-        memcpy(block, &data_block, sizeof(unsigned int));
+        //memcpy(block, &data_block, sizeof(unsigned int));
 
         if (debug == 2) printf("Copied data block\n");
         strcpy((*block).entries[0].name, ".");
@@ -235,7 +235,8 @@ int create_new(int pinum, int type){
 
         if (debug == 2) printf("Setting up directory\n");
         for(int i = 2; i < 128; i++)
-        (*block).entries[i].inum = -1;    
+        (*block).entries[i].inum = -1;  
+        // memcpy(data_block, block)  
     }
     // pwrite(fd, &inode, sizeof(inode_t), inode_table+inum*sizeof(inode_t));
     // pwrite(fd, &data_block, UFS_BLOCK_SIZE, data_block);
